@@ -6,7 +6,7 @@ usage() {
     cat <<EOF
 Usage: $0 [--dry-run] [--print-only] [--config <opencode.json>] [--server-ip IP] [--set-default] <model-id>
 
-Writes an OpenCode provider for <model-id> (OpenAI-compatible, current "providers" schema) and
+Writes an OpenCode provider for <model-id> (@ai-sdk/openai-compatible, "provider" key of the stable releases) and
 merges it into the OpenCode config (default: \${XDG_CONFIG_HOME:-~/.config}/opencode/opencode.json).
 Other providers and settings are kept; the old file is backed up when it changes.
 The API key is not written: the config references {env:CLIENT_KEY_ENV}. Run as the OpenCode user.
@@ -52,13 +52,15 @@ snippet=$(jq -n \
     --argjson ctx "$CTX" --argjson out "$OUTPUT_LIMIT" --argjson timeout "$CLIENT_TIMEOUT_MS" \
     --argjson reasoning "$([[ ${REASONING:-0} == 1 ]] && echo true || echo false)" '
     {"$schema": "https://opencode.ai/config.json",
-     providers: {($p): {
+     provider: {($p): {
+        npm: "@ai-sdk/openai-compatible",
         name: ("llama.cpp: " + $name),
-        package: "@opencode/ai/providers/openai-compatible",
-        settings: {baseURL: $url, apiKey: ("{env:" + $env + "}"), timeout: $timeout},
+        options: {baseURL: $url, apiKey: ("{env:" + $env + "}"), timeout: $timeout},
         models: {($alias): {
             name: $name,
-            capabilities: {tools: true, temperature: true, reasoning: {supported: $reasoning}},
+            tool_call: true,
+            reasoning: $reasoning,
+            temperature: true,
             limit: {context: $ctx, output: $out}}}}}}')
 
 if ((PRINT_ONLY)); then
@@ -69,13 +71,10 @@ fi
 current='{}'
 if [[ -s $TARGET ]]; then
     current=$(jq . "$TARGET" 2>/dev/null) || die "$TARGET is not plain JSON (JSONC comments?); merge this by hand: $0 --print-only $MODEL"
-    if jq -e '.provider // empty' <<<"$current" >/dev/null; then
-        warn "$TARGET also has the deprecated \"provider\" key; leaving it untouched"
-    fi
 fi
 merged=$(jq --argjson s "$snippet" --arg p "$PROVIDER" --arg m "$PROVIDER/$ALIAS" --argjson def "$SET_DEFAULT" '
     .["$schema"] = $s["$schema"]
-    | .providers[$p] = $s.providers[$p]
+    | .provider[$p] = $s.provider[$p]
     | if $def == 1 then .model = $m else . end' <<<"$current")
 
 if [[ $merged == "$current" ]]; then

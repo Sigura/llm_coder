@@ -138,5 +138,6 @@ not 2. A single node cannot hold the model, so the per-socket mode is `node0-3` 
   Lighter Engram tables (IQ4_NL 111 GB) can be swapped in per the repo's `engram/README.md`.
 - Fallbacks: `UD-IQ2_XXS` (301 GB incl. Engram) or `ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF`
   (needs its revision from 2026-10-28 or later, see #31263).
-- OpenCode now uses `providers` (the old `provider` key is deprecated) and the package
-  `@opencode/ai/providers/openai-compatible`. `60-client-config.sh` writes that format.
+- OpenCode: the stable release (1.19.5) reads `provider` + `npm: "@ai-sdk/openai-compatible"`, which is what
+  `60-client-config.sh` writes. It silently ignores the `providers` format described on opencode.ai/docs
+  (dev branch). Check this again when OpenCode 2.x ships.
