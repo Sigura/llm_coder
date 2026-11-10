@@ -33,7 +33,7 @@ init_logging() {
     fi
     LOG_FILE="$LOGS_DIR/${SCRIPT_NAME}${tag:+-$tag}-$(date +%Y%m%d).log"
     exec > >(tee -a "$LOG_FILE") 2>&1
-    info "---- start: $0 $* (pid $$, user $(id -un), dry-run=$DRY_RUN)"
+    info "---- start ${tag:-} (pid $$, user $(id -un), dry-run=$DRY_RUN)"
 }
 
 # Run a command with timestamped output, or only print it in dry-run mode.
