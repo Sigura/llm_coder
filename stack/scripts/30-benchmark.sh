@@ -57,6 +57,12 @@ for row in "${GPU_ROWS[@]}"; do
     GPU_FREE0[idx]=$free
 done
 
+if has_phase numa || has_phase spec; then
+    for mode in $TUNE_NUMA_MODES $NUMA_MODE; do
+        if [[ $mode == interleave || $mode == node* ]]; then require_cmd numactl; fi
+    done
+fi
+
 if ((DRY_RUN)); then
     info "[dry-run] phases=$PHASES reps=$BENCH_REPS GPUs=$NGPU margin=${VRAM_MARGIN_MIB}MiB numa modes: $TUNE_NUMA_MODES"
     SRV_PORT=$BENCH_PORT SRV_HOST=127.0.0.1 build_server_cmd
@@ -204,20 +210,33 @@ probe() { # <ncmoe> <ts> <spec> -> 0 fits with margin, 1 below margin, 2 failed 
     return $rc
 }
 
+N_LAYER=""
+read_n_layer() { # from the log of the last server start (needs -lv 4)
+    N_LAYER=$(grep -oE 'n_layer += [0-9]+' "$SERVER_LOG" | head -1 | grep -oE '[0-9]+$') ||
+        die "could not read n_layer from $SERVER_LOG"
+    info "model has $N_LAYER layers"
+}
+
+# Binary search for the smallest n-cpu-moe in (lo, hi] that fits; hi must already be known to fit.
+bisect_ncmoe() { # <spec> <ts> <lo> <hi> <free at hi>; sets FIT_N FIT_FREE
+    local spec=$1 ts=$2 lo=$3 hi=$4 mid
+    FIT_FREE=$5
+    while ((hi - lo > 1)); do
+        mid=$(((lo + hi) / 2))
+        if probe "$mid" "$ts" "$spec"; then hi=$mid; FIT_FREE=$PROBE_FREE; else lo=$mid; fi
+    done
+    FIT_N=$hi
+}
+
 BEST_NCMOE=$N_CPU_MOE
 BEST_TS=$TENSOR_SPLIT
 if has_phase fit; then
     ts=${TENSOR_SPLIT:-$(initial_ts)}
     probe 999 "$ts" 0 || die "does not fit even with all routed experts on CPU; lower CTX or -ub/-b in EXTRA_ARGS"
-    nl=$(grep -oE 'n_layer += [0-9]+' "$SERVER_LOG" | head -1 | grep -oE '[0-9]+$') || die "could not read n_layer from $SERVER_LOG"
-    info "model has $nl layers"
-    lo=-1
-    hi=$nl
-    hi_free=$PROBE_FREE
-    while ((hi - lo > 1)); do
-        mid=$(((lo + hi) / 2))
-        if probe "$mid" "$ts" 0; then hi=$mid; hi_free=$PROBE_FREE; else lo=$mid; fi
-    done
+    read_n_layer
+    bisect_ncmoe 0 "$ts" -1 "$N_LAYER" "$PROBE_FREE"
+    hi=$FIT_N
+    hi_free=$FIT_FREE
     for ((r = 1; r <= TUNE_REBALANCE_ROUNDS && hi > 0; r++)); do
         ts2=$(rebalance_ts "$ts" "$hi_free")
         [[ $ts2 == "$ts" ]] && break
@@ -255,7 +274,7 @@ bench_config() { # <label> <ncmoe> <ts> <numa> <spec>
         out=$(measure_tg)
         read -r t acc <<<"$out"
         tg+=("$t")
-        info "[$label] rep $r: pp4096=${pp4[-1]} pp32768=${pp32[-1]} tg512=$t draft-accept=$acc"
+        info "[$label] rep $r: $(printf 'pp4096=%.1f pp32768=%.1f tg512=%.2f' "${pp4[-1]}" "${pp32[-1]}" "$t") draft-accept=$acc"
     done
     stop_server
     a=$(printf '%s\n' "${pp4[@]}" | mean)
@@ -286,16 +305,20 @@ if has_phase spec; then
         if ((${#ROWS[@]} == 0)); then
             bench_config "baseline-$NUMA_MODE" "$BEST_NCMOE" "$BEST_TS" "$NUMA_MODE" 0
         fi
-        spec_ncmoe=$BEST_NCMOE
-        fitted=0
-        for _ in 1 2 3 4 5 6; do
-            if probe "$spec_ncmoe" "$BEST_TS" 1; then fitted=1; break; fi
-            spec_ncmoe=$((spec_ncmoe + 1))
-        done
-        if ((fitted)); then
+        spec_ncmoe=""
+        if probe "$BEST_NCMOE" "$BEST_TS" 1; then
+            spec_ncmoe=$BEST_NCMOE
+        elif probe 999 "$BEST_TS" 1; then
+            [[ -n $N_LAYER ]] || read_n_layer
+            lo=$((BEST_NCMOE < N_LAYER ? BEST_NCMOE : N_LAYER - 1))
+            bisect_ncmoe 1 "$BEST_TS" "$lo" "$N_LAYER" "$PROBE_FREE"
+            spec_ncmoe=$FIT_N
+        fi
+        if [[ -n $spec_ncmoe ]]; then
+            info "drafter fits with N_CPU_MOE=$spec_ncmoe"
             bench_config "spec-$WIN_NUMA" "$spec_ncmoe" "$BEST_TS" "$WIN_NUMA" 1
         else
-            warn "drafter does not fit within 6 extra CPU-MoE layers; spec decoding not benchmarked"
+            warn "drafter does not fit even with every routed expert on CPU; spec decoding not benchmarked"
         fi
     fi
 fi
