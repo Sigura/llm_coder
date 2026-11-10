@@ -33,19 +33,8 @@ done
 
 load_global
 require_root "$@"
-LOGS_DIR=/var/log/llm-stack
-init_logging bootstrap
 
-APT_PKGS=(build-essential cmake ninja-build git jq curl numactl python3-venv shellcheck util-linux iproute2)
-missing=()
-for p in "${APT_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
-if ((${#missing[@]})); then
-    run apt-get update
-    run env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
-else
-    info "apt packages present"
-fi
-
+# User and layout come first so that this run can already log to LOGS_DIR.
 if id "$LLM_USER" >/dev/null 2>&1; then
     info "user $LLM_USER exists"
 else
@@ -66,10 +55,28 @@ done
 [[ $(stat -c %a "$LLM_ROOT/secrets" 2>/dev/null) == 700 ]] || run chmod 700 "$LLM_ROOT/secrets"
 [[ $(stat -c %U "$LLM_ROOT" 2>/dev/null) == "$LLM_USER" ]] || run chown "$LLM_USER:$LLM_USER" "$LLM_ROOT"
 
+init_logging bootstrap
+
+APT_PKGS=(build-essential cmake ninja-build git jq curl numactl python3-venv shellcheck util-linux iproute2)
+missing=()
+for p in "${APT_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
+if ((${#missing[@]})); then
+    run apt-get update
+    run env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+else
+    info "apt packages present"
+fi
+
 if [[ -d $LLM_ROOT/stack/.git ]]; then
     info "$LLM_ROOT/stack already cloned"
 elif [[ -n $SOURCE ]]; then
-    run runuser -u "$LLM_USER" -- git clone "$SOURCE" "$LLM_ROOT/stack"
+    safe=()
+    # A local source owned by another user fails git's ownership check ("dubious ownership").
+    if [[ -d $SOURCE ]]; then
+        src=$(cd "$SOURCE" && pwd)
+        safe=(-c "safe.directory=$src" -c "safe.directory=$src/.git")
+    fi
+    run runuser -u "$LLM_USER" -- git "${safe[@]}" clone "$SOURCE" "$LLM_ROOT/stack"
 else
     warn "$LLM_ROOT/stack missing; re-run with --source <repo> or clone it there as $LLM_USER"
 fi
