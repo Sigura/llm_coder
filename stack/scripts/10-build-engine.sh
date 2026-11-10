@@ -85,15 +85,15 @@ smoke_test() { # <engine dir>
     printf '%s\n' "$out" | while IFS= read -r l; do info "  $l"; done
     grep -q CUDA0 <<<"$out" || die "smoke: no CUDA device visible to the new build"
     port_in_use "$SMOKE_PORT" && die "SMOKE_PORT $SMOKE_PORT is in use"
-    "$dir/bin/llama-server" -m "$model" -ngl 99 -c 512 --host 127.0.0.1 --port "$SMOKE_PORT" \
+    # -dev CUDA0 makes the server fail at load instead of silently running on CPU.
+    "$dir/bin/llama-server" -m "$model" -dev CUDA0 -ngl 99 -c 256 --host 127.0.0.1 --port "$SMOKE_PORT" \
         >"$smoke_dir/server.log" 2>&1 &
     pid=$!
     if wait_ready "http://127.0.0.1:$SMOKE_PORT" 120 "$pid"; then
         body=$(curl -sS --max-time 60 -H 'Content-Type: application/json' \
             -d '{"prompt":"Once upon a time","n_predict":16,"temperature":0}' \
             "http://127.0.0.1:$SMOKE_PORT/completion" || true)
-        if [[ $(jq -r '.tokens_predicted // 0' <<<"$body" 2>/dev/null) -gt 0 ]] &&
-            grep -q 'offloaded .* layers to GPU' "$smoke_dir/server.log"; then
+        if [[ $(jq -r '.tokens_predicted // 0' <<<"$body" 2>/dev/null) -gt 0 ]]; then
             info "smoke: generated '$(jq -r .content <<<"$body" | tr '\n' ' ')'"
             ok=1
         fi
