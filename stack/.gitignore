@@ -1,0 +1,6 @@
+secrets/
+*.key
+*.gguf
+*.gguf_file
+logs/
+*.log

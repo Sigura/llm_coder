@@ -1,0 +1,29 @@
+# Template unit, instance = model id (config/models/<id>.env).
+# @LLM_ROOT@, @STACK_DIR@ and @LLM_USER@ are filled in by scripts/40-install-service.sh.
+[Unit]
+Description=llama.cpp server for %i
+Documentation=file://@STACK_DIR@/README.md
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=900
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=@LLM_USER@
+Group=@LLM_USER@
+WorkingDirectory=@LLM_ROOT@
+EnvironmentFile=@STACK_DIR@/config/global.env
+EnvironmentFile=@STACK_DIR@/config/models/%i.env
+ExecStart=@STACK_DIR@/scripts/llm-serve.sh %i
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=90
+LimitMEMLOCK=infinity
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llm-%i
+
+[Install]
+WantedBy=multi-user.target
