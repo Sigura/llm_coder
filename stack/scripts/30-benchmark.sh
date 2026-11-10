@@ -100,6 +100,8 @@ LOAD_SECONDS=0
 start_server() { # <label>; uses SRV_NCMOE SRV_TS SRV_NUMA SRV_SPEC
     local label=$1 start=$SECONDS
     SRV_PORT=$BENCH_PORT SRV_HOST=127.0.0.1 build_server_cmd
+    # -lv 4 makes the loader print model info (n_layer) that the fit search needs.
+    SERVER_CMD+=(-lv 4)
     SERVER_LOG=$WORK/server-$label.log
     info "starting server [$label]: ncmoe=$SRV_NCMOE ts=${SRV_TS:-auto} numa=$SRV_NUMA spec=$SRV_SPEC"
     printf '%q ' "${SERVER_CMD[@]}" >"$SERVER_LOG"
