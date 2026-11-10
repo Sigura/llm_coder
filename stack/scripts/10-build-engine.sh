@@ -63,8 +63,11 @@ if ((DRY_RUN)) && [[ ! -d $ENGINE_SRC/.git ]]; then
     info "[dry-run] would clone $LLAMA_CPP_REPO into $ENGINE_SRC and build $REF"
     exit 0
 fi
-fetch_src
-COMMIT=$(git -C "$ENGINE_SRC" rev-parse --verify -q "$REF^{commit}") || die "unknown ref '$REF'"
+# Tags and commit shas are immutable, so only fetch when the ref is not known locally yet.
+if ! COMMIT=$(git -C "$ENGINE_SRC" rev-parse --verify -q "$REF^{commit}" 2>/dev/null); then
+    fetch_src
+    COMMIT=$(git -C "$ENGINE_SRC" rev-parse --verify -q "$REF^{commit}") || die "unknown ref '$REF'"
+fi
 if git -C "$ENGINE_SRC" show-ref --verify -q "refs/tags/$REF"; then NAME=$REF; else NAME=${COMMIT:0:12}; fi
 DEST=$ENGINES_DIR/llama.cpp-$NAME
 info "ref $REF -> commit $COMMIT -> $DEST"
