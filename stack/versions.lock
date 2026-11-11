@@ -1,2 +1,11 @@
 # kind	id	fields (written by scripts; do not edit by hand)
 engine	llama.cpp	b12247	c1a4febe9d107de438922f7c8ebb88108d235ea4
+model	deepseek-v4.1-flash-1017	unsloth/DeepSeek-V4.1-Flash-1017-GGUF	2688c0c3c2c3b052ec4f6d10a8417b0ef7ee4eba
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00001-of-00007.gguf	5780868	6b6e9ace54298156974cc3e024e5ba86d50c40c06482da8f64fece77d7f73452
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00002-of-00007.gguf	49290279808	fa56e7cb79f88d992170bbc41b192991bd89b9534c53106e328fc03a5d26afed
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00003-of-00007.gguf	49745070208	b279f9bbb331460d182658a9ec6a49eb232ef7d8c69600a2c53d5d797bf037b4
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00004-of-00007.gguf	48680128800	c7fed7b94a11aeafbf07e164940718fab26e99a5f1d9986af0602c6515d18bff
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00005-of-00007.gguf	49970937696	c8d6bd8063607e788db7daed01487f4e87a9529d5756dd561481bed78fea7d6d
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00006-of-00007.gguf	1929325664	2f62bf418b0f722254728bdd88b4b1c88c1b64a4d664c7b696c08fecd49abd76
+model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00007-of-00007.gguf	135172021792	a653c5309b7c74a6c41580aaa8c2d2bbdae0342253bca2cd3fc9e69d05f3d0eb
+model-file	deepseek-v4.1-flash-1017	dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf	7976914240	6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a
