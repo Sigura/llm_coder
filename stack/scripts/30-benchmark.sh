@@ -40,6 +40,7 @@ load_global
 load_model "$MODEL"
 require_llm_user "$@"
 init_logging "$MODEL_ID"
+single_instance bench
 require_cmd curl jq nvidia-smi awk
 require_engine_ref "${MIN_ENGINE_REF:-}"
 require_model_verified

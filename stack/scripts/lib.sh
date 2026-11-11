@@ -72,6 +72,15 @@ require_llm_user() {
     [[ $(id -un) == "$LLM_USER" ]] || die "must run as user '$LLM_USER' (try: sudo -u $LLM_USER $0 $*)"
 }
 
+# Refuse to run while another run with the same name holds the lock (also across containers
+# that share LLM_ROOT). Held on fd 9 until the script exits.
+single_instance() {
+    ((DRY_RUN)) && return 0
+    local f=$STATE_DIR/$1.lock
+    exec 9>>"$f"
+    flock -n 9 || die "another '$1' run is in progress (lock $f); wait for it or stop it first"
+}
+
 # Config files are shared with systemd's EnvironmentFile=, so only allow syntax both parse identically.
 check_env_file() {
     local f=$1 n=0 line
@@ -242,7 +251,7 @@ git_commit() {
 switch_symlink() {
     local link=$1 target=$2 prev_link=$3 old=""
     [[ -L $link ]] && old=$(readlink -f "$link")
-    if [[ $old == "$(readlink -f "$target")" ]]; then
+    if [[ -n $old && $old == "$(readlink -f "$target")" ]]; then
         info "$link already points to $target"
         return 0
     fi

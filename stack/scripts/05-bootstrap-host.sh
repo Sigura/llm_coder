@@ -7,6 +7,8 @@ usage() {
 Usage: sudo $0 [--dry-run] [--source <git url|path>] [--allow-drop-caches]
 
 One-time host setup (root). Idempotent; each step is skipped when already done.
+Run as LLM_USER instead of root (user mode, e.g. in a container): no apt, groups or
+drop-caches; only the layout, the clone and the venv.
   - installs missing apt packages (build tools, numactl, jq, python3-venv, shellcheck)
   - creates system user LLM_USER and the LLM_ROOT layout (secrets/ mode 700)
   - clones this repo to LLM_ROOT/stack when --source is given and it is absent
@@ -32,7 +34,15 @@ while (($#)); do
 done
 
 load_global
-require_root "$@"
+# User mode: LLM_USER is the current login (e.g. inside a container); root-only steps are skipped.
+if ((EUID == 0)); then
+    USER_MODE=0
+elif [[ $(id -un) == "$LLM_USER" ]]; then
+    USER_MODE=1
+    ((DROP_CACHES == 0)) || die "--allow-drop-caches needs root"
+else
+    die "run as root, or as LLM_USER ($LLM_USER) for user mode"
+fi
 
 # User and layout come first so that this run can already log to LOGS_DIR.
 if id "$LLM_USER" >/dev/null 2>&1; then
@@ -40,27 +50,36 @@ if id "$LLM_USER" >/dev/null 2>&1; then
 else
     run useradd --system --home-dir "$LLM_ROOT" --no-create-home --shell /usr/sbin/nologin "$LLM_USER"
 fi
-for g in video render; do
-    if getent group "$g" >/dev/null && ! id -nG "$LLM_USER" 2>/dev/null | grep -qw "$g"; then
-        run usermod -aG "$g" "$LLM_USER"
-    fi
-done
+if ((USER_MODE == 0)); then
+    for g in video render; do
+        if getent group "$g" >/dev/null && ! id -nG "$LLM_USER" 2>/dev/null | grep -qw "$g"; then
+            run usermod -aG "$g" "$LLM_USER"
+        fi
+    done
+fi
 
 for d in "" engines models secrets results logs state cache hf-cache; do
     path=$LLM_ROOT${d:+/$d}
     if [[ ! -d $path ]]; then
-        run install -d -o "$LLM_USER" -g "$LLM_USER" -m 755 "$path"
+        if ((USER_MODE)); then run install -d -m 755 "$path"; else run install -d -o "$LLM_USER" -g "$LLM_USER" -m 755 "$path"; fi
+    elif [[ $(stat -c %U "$path") != "$LLM_USER" ]]; then
+        ((USER_MODE == 0)) || die "$path is owned by $(stat -c %U "$path"), not $LLM_USER; chown it as root"
+        run chown "$LLM_USER:$LLM_USER" "$path"
     fi
 done
 [[ $(stat -c %a "$LLM_ROOT/secrets" 2>/dev/null) == 700 ]] || run chmod 700 "$LLM_ROOT/secrets"
-[[ $(stat -c %U "$LLM_ROOT" 2>/dev/null) == "$LLM_USER" ]] || run chown "$LLM_USER:$LLM_USER" "$LLM_ROOT"
+if ! ((DRY_RUN)) && ! as_llm test -w "$LLM_ROOT"; then
+    die "$LLM_USER cannot reach $LLM_ROOT: every parent directory needs o+x (namei -l $LLM_ROOT), or pick another LLM_ROOT"
+fi
 
 init_logging bootstrap
 
 APT_PKGS=(build-essential cmake ninja-build git jq curl numactl python3-venv shellcheck util-linux iproute2)
 missing=()
 for p in "${APT_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
-if ((${#missing[@]})); then
+if ((USER_MODE)); then
+    info "user mode: apt packages not managed; 00-check-host.sh reports missing tools"
+elif ((${#missing[@]})); then
     run apt-get update
     run env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 else
@@ -69,6 +88,8 @@ fi
 
 if [[ -d $LLM_ROOT/stack/.git ]]; then
     info "$LLM_ROOT/stack already cloned"
+elif [[ -n $SOURCE ]] && ((USER_MODE)); then
+    run git clone "$SOURCE" "$LLM_ROOT/stack"
 elif [[ -n $SOURCE ]]; then
     safe=()
     # A local source owned by another user fails git's ownership check ("dubious ownership").
@@ -76,7 +97,10 @@ elif [[ -n $SOURCE ]]; then
         src=$(cd "$SOURCE" && pwd)
         safe=(-c "safe.directory=$src" -c "safe.directory=$src/.git")
     fi
-    run runuser -u "$LLM_USER" -- git "${safe[@]}" clone "$SOURCE" "$LLM_ROOT/stack"
+    # Cloned as root because LLM_USER usually cannot read the source (e.g. under a 750 home).
+    # --no-hardlinks: the chown below must not reach the source repo's object files.
+    run git "${safe[@]}" clone --no-hardlinks "$SOURCE" "$LLM_ROOT/stack"
+    run chown -R "$LLM_USER:$LLM_USER" "$LLM_ROOT/stack"
 else
     warn "$LLM_ROOT/stack missing; re-run with --source <repo> or clone it there as $LLM_USER"
 fi
@@ -88,8 +112,8 @@ have_ver=$("$venv/bin/python" -c 'import importlib.metadata as m; print(m.versio
 if [[ -n $want_ver && $have_ver == "$want_ver" ]]; then
     info "venv $venv has huggingface_hub $have_ver"
 else
-    [[ -d $venv ]] || run runuser -u "$LLM_USER" -- python3 -m venv "$venv"
-    run runuser -u "$LLM_USER" -- "$venv/bin/pip" install -q -r "$req"
+    [[ -d $venv ]] || run as_llm python3 -m venv "$venv"
+    run as_llm "$venv/bin/pip" install -q -r "$req"
 fi
 
 if ((DROP_CACHES)); then

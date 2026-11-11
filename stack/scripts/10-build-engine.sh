@@ -33,6 +33,7 @@ done
 load_global
 require_llm_user "$@"
 init_logging "${REF:-locked}"
+single_instance engine-build
 require_cmd git cmake curl sha256sum "$HF_CLI"
 
 if [[ -z $REF ]]; then

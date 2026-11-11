@@ -57,6 +57,7 @@ fi
 
 require_llm_user "$@"
 init_logging "$MODEL_ID"
+single_instance "download-$MODEL_ID"
 info "model $MODEL_ID: $HF_REPO @ $HF_REVISION"
 
 # A revision is immutable, so its metadata is fetched once and cached.
