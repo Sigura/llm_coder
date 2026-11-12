@@ -114,7 +114,11 @@ for f in "${FILES[@]}"; do
     stamp_ok "$f" && continue
     TODO+=("$f")
     have=0
-    [[ -f $REV_DIR/$f ]] && have=$(stat -c %s "$REV_DIR/$f")
+    if [[ -f $REV_DIR/$f ]]; then
+        have=$(stat -c %s "$REV_DIR/$f")
+    elif [[ -f $REV_DIR/$f.part ]]; then
+        have=$(stat -c %s "$REV_DIR/$f.part")
+    fi
     ((have < SIZE[$f])) && need=$((need + SIZE[$f] - have))
 done
 
@@ -129,24 +133,50 @@ else
     ((avail >= required)) || die "not enough space on $(df -P "$probe" | awk 'NR == 2 { print $6 }'): need $((required / 1000000000)) GB (incl. ${FREE_SPACE_MARGIN_PCT}%), have $((avail / 1000000000)) GB"
     info "free space ok: $((avail / 1000000000)) GB available, $((required / 1000000000)) GB required"
 
-    to_download=()
-    for f in "${TODO[@]}"; do
-        [[ -f $REV_DIR/$f && $(stat -c %s "$REV_DIR/$f") -eq ${SIZE[$f]} ]] || to_download+=("$f")
-    done
-    if ((${#to_download[@]})); then
-        run mkdir -p "$REV_DIR"
-        delay=$DOWNLOAD_BACKOFF_SEC
-        for ((i = 1; ; i++)); do
-            if run "$HF_CLI" download "$HF_REPO" "${to_download[@]}" --revision "$HF_REVISION" \
-                --local-dir "$REV_DIR" --max-workers "$DOWNLOAD_WORKERS"; then
-                break
-            fi
-            ((i < DOWNLOAD_RETRIES)) || die "hf download failed $i times; re-run to resume"
-            warn "hf download failed (attempt $i/$DOWNLOAD_RETRIES); resuming in ${delay}s"
-            sleep "$delay"
-            delay=$((delay * 2))
+    # curl instead of `hf download`: huggingface_hub writes each file to a per-process temp file and
+    # deletes it on failure, so an interrupted multi-GB download restarts from zero. curl -C - continues
+    # <file>.part with an HTTP range request; the sha256 check below catches anything a resume got wrong.
+    fetch_one() {
+        local f=$1 out=$REV_DIR/$1
+        mkdir -p "$(dirname "$out")"
+        info "fetch $f (have $(stat -c %s "$out.part" 2>/dev/null || echo 0) of ${SIZE[$f]} bytes)"
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 --speed-limit 1024 --speed-time 120 \
+            -C - -o "$out.part" "https://huggingface.co/$HF_REPO/resolve/$HF_REVISION/$f" || return 1
+        mv -f "$out.part" "$out"
+        info "fetched $f"
+    }
+    delay=$DOWNLOAD_BACKOFF_SEC
+    for ((i = 1; ; i++)); do
+        to_download=()
+        for f in "${TODO[@]}"; do
+            [[ -f $REV_DIR/$f && $(stat -c %s "$REV_DIR/$f") -eq ${SIZE[$f]} ]] || to_download+=("$f")
         done
-    fi
+        ((${#to_download[@]})) || break
+        if ((DRY_RUN)); then
+            info "[dry-run] would fetch ${#to_download[@]} files with curl -C - ($DOWNLOAD_WORKERS in parallel)"
+            break
+        fi
+        mkdir -p "$REV_DIR"
+        failed=0
+        running=0
+        for f in "${to_download[@]}"; do
+            if ((running >= DOWNLOAD_WORKERS)); then
+                wait -n || failed=1
+                running=$((running - 1))
+            fi
+            fetch_one "$f" &
+            running=$((running + 1))
+        done
+        while ((running > 0)); do
+            wait -n || failed=1
+            running=$((running - 1))
+        done
+        ((failed)) || continue
+        ((i < DOWNLOAD_RETRIES)) || die "download failed $i times; re-run to resume (partial files are kept as *.part)"
+        warn "download failed (attempt $i/$DOWNLOAD_RETRIES); resuming in ${delay}s"
+        sleep "$delay"
+        delay=$((delay * 2))
+    done
 
     if ((DRY_RUN)); then
         info "[dry-run] would verify sha256 of ${#TODO[@]} files"
@@ -174,6 +204,18 @@ else
         fi
     fi
 fi
+
+# SPLIT_LINKS="<link>:<target> ...": e.g. a shared Engram file that must also appear as shard N of a split GGUF.
+read -ra split_links <<<"${SPLIT_LINKS:-}"
+for pair in "${split_links[@]}"; do
+    link=${pair%%:*}
+    target=${pair#*:}
+    [[ $pair == *:* && -n $link && -n $target ]] || die "SPLIT_LINKS entry '$pair' is not <link>:<target>"
+    [[ -n ${SIZE[$target]:-} ]] || die "SPLIT_LINKS target $target is not among the selected files"
+    [[ $(dirname "$link") == "$(dirname "$target")" ]] || die "SPLIT_LINKS $link and $target must be in the same directory"
+    [[ $(readlink "$REV_DIR/$link" 2>/dev/null) == "$(basename "$target")" ]] && continue
+    run ln -sfn "$(basename "$target")" "$REV_DIR/$link"
+done
 
 if ((!DRY_RUN)); then
     touch "$REV_DIR/.complete"
