@@ -136,12 +136,64 @@ else
     # curl instead of `hf download`: huggingface_hub writes each file to a per-process temp file and
     # deletes it on failure, so an interrupted multi-GB download restarts from zero. curl -C - continues
     # <file>.part with an HTTP range request; the sha256 check below catches anything a resume got wrong.
+    fetch_range() { # append bytes [start + current size, end] of $1 to chunk file $2
+        local url=$1 chunk=$2 s=$3 e=$4 got try
+        for ((try = 1; ; try++)); do
+            got=$(stat -c %s "$chunk")
+            ((s + got <= e)) || break
+            # no curl --retry: a retried transfer would re-append the range from its start
+            curl -fsSL --speed-limit 1024 --speed-time 120 -r "$((s + got))-$e" "$url" >>"$chunk" && continue
+            ((try < 5)) || return 1
+            sleep 10
+        done
+        ((s + got == e + 1)) || { log FAIL "$chunk is larger than its range"; return 1; }
+    }
+    # Each HF connection gets ~1 MB/s, so the rest of a large file is split into DOWNLOAD_STREAMS chunk files
+    # <file>.part.<start>-<end> fetched in parallel. The boundaries live in the names, so a re-run resumes
+    # every chunk; chunks are then appended to <file>.part in order and deleted.
+    fetch_ranges() {
+        local f=$1 url=$2 out=$REV_DIR/$1 size=${SIZE[$1]} have c s e step failed=0
+        local -a chunks=() pids=()
+        have=$(stat -c %s "$out.part" 2>/dev/null || echo 0)
+        for c in "$out".part.*-*; do [[ -f $c ]] && chunks+=("${c##*.part.}"); done
+        if ((${#chunks[@]} == 0)); then
+            step=$(((size - have + DOWNLOAD_STREAMS - 1) / DOWNLOAD_STREAMS))
+            for ((s = have; s < size; s += step)); do
+                e=$((s + step - 1))
+                ((e < size)) || e=$((size - 1))
+                : >"$out.part.$s-$e"
+                chunks+=("$s-$e")
+            done
+        fi
+        mapfile -t chunks < <(printf '%s\n' "${chunks[@]}" | sort -n)
+        info "fetch $f in ${#chunks[@]} parallel ranges"
+        for c in "${chunks[@]}"; do
+            fetch_range "$url" "$out.part.$c" "${c%-*}" "${c#*-}" &
+            pids+=($!)
+        done
+        for c in "${pids[@]}"; do wait "$c" || failed=1; done
+        ((!failed)) || return 1
+        for c in "${chunks[@]}"; do
+            s=${c%-*}
+            e=${c#*-}
+            have=$(stat -c %s "$out.part" 2>/dev/null || echo 0)
+            # have > s only if an earlier run was interrupted while appending this chunk
+            ((have >= s && have <= e + 1)) || { log FAIL "$f.part has $have bytes, next chunk starts at $s"; return 1; }
+            tail -c +$((have - s + 1)) "$out.part.$c" >>"$out.part"
+            rm -f "$out.part.$c"
+        done
+    }
     fetch_one() {
-        local f=$1 out=$REV_DIR/$1
+        local f=$1 out=$REV_DIR/$1 url="https://huggingface.co/$HF_REPO/resolve/$HF_REVISION/$1" have
         mkdir -p "$(dirname "$out")"
-        info "fetch $f (have $(stat -c %s "$out.part" 2>/dev/null || echo 0) of ${SIZE[$f]} bytes)"
-        curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 --speed-limit 1024 --speed-time 120 \
-            -C - -o "$out.part" "https://huggingface.co/$HF_REPO/resolve/$HF_REVISION/$f" || return 1
+        have=$(stat -c %s "$out.part" 2>/dev/null || echo 0)
+        info "fetch $f (have $have of ${SIZE[$f]} bytes)"
+        if compgen -G "$out.part.*-*" >/dev/null || ((DOWNLOAD_STREAMS > 1 && ${SIZE[$f]} - have >= DOWNLOAD_STREAM_MIN_BYTES)); then
+            fetch_ranges "$f" "$url" || return 1
+        else
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 --speed-limit 1024 --speed-time 120 \
+                -C - -o "$out.part" "$url" || return 1
+        fi
         mv -f "$out.part" "$out"
         info "fetched $f"
     }
