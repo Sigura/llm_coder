@@ -21,12 +21,13 @@ EOF
 MODEL=""
 PHASES=fit,numa,spec
 WRITE=1
+REPS_ARG=""
 while (($#)); do
     case $1 in
     -h | --help) usage; exit 0 ;;
     -n | --dry-run) DRY_RUN=1 ;;
     --phases) PHASES=$2; shift ;;
-    --reps) BENCH_REPS=$2; shift ;;
+    --reps) REPS_ARG=$2; shift ;;
     --no-write) WRITE=0 ;;
     -*) die "unknown option $1" ;;
     *) MODEL=$1 ;;
@@ -38,6 +39,8 @@ has_phase() { [[ ,$PHASES, == *",$1,"* ]]; }
 
 load_global
 load_model "$MODEL"
+# The config files set BENCH_REPS, so the command-line value is applied after loading them.
+[[ -z $REPS_ARG ]] || BENCH_REPS=$REPS_ARG
 require_llm_user "$@"
 init_logging "$MODEL_ID"
 single_instance bench
