@@ -2,6 +2,7 @@
 engine	llama.cpp	b12247	c1a4febe9d107de438922f7c8ebb88108d235ea4
 model	deepseek-v4.1-flash-1017	unsloth/DeepSeek-V4.1-Flash-1017-GGUF	2688c0c3c2c3b052ec4f6d10a8417b0ef7ee4eba
 model	deepseek-v4.1-flash-1017-gsq	ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF	65d53bc8be65123e255ff02f3ded958b6dbf54fd
+model	qwen3.6-35b-a3b	unsloth/Qwen3.6-35B-A3B-GGUF	a483e9e6cbd595906af30beda3187c2663a1118c
 model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00001-of-00007.gguf	5780868	6b6e9ace54298156974cc3e024e5ba86d50c40c06482da8f64fece77d7f73452
 model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00002-of-00007.gguf	49290279808	fa56e7cb79f88d992170bbc41b192991bd89b9534c53106e328fc03a5d26afed
 model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00003-of-00007.gguf	49745070208	b279f9bbb331460d182658a9ec6a49eb232ef7d8c69600a2c53d5d797bf037b4
@@ -16,3 +17,4 @@ model-file	deepseek-v4.1-flash-1017-gsq	DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS
 model-file	deepseek-v4.1-flash-1017-gsq	DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00004-of-00006.gguf	39036908384	9eb9b4de1968f150dfc207eb31c27be9cd9b5666a9a6246bde8a22b184b4bee0
 model-file	deepseek-v4.1-flash-1017-gsq	DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00005-of-00006.gguf	19923784832	7e35f6b4e6fc46f6c4b152b593d84d683c5ece695ae6ad734f556198c041bec1
 model-file	deepseek-v4.1-flash-1017-gsq	DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf	110595290816	3dac4c54893ad7aa89103c0028500eadc78e74112cef3a2930a97e67dc9fb4f3
+model-file	qwen3.6-35b-a3b	Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf	22360456160	707a55a8a4397ecde44de0c499d3e68c1ad1d240d1da65826b4949d1043f4450
