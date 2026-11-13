@@ -11,7 +11,9 @@ Run as LLM_USER instead of root (user mode, e.g. in a container): no apt, groups
 drop-caches; only the layout, the clone and the venv.
   - installs missing apt packages (build tools, numactl, jq, python3-venv, shellcheck)
   - creates system user LLM_USER and the LLM_ROOT layout (secrets/ mode 700)
-  - clones this repo to LLM_ROOT/stack when --source is given and it is absent
+  - clones this repo to LLM_ROOT/repo and links LLM_ROOT/stack to its stack/ directory, when
+    --source is given and LLM_ROOT/stack is absent (an older checkout of the stack-only repo
+    at LLM_ROOT/stack is kept as is)
   - creates LLM_ROOT/venv with the pinned huggingface_hub (requirements.txt)
   --allow-drop-caches  also install /usr/local/sbin/llm-drop-caches and a sudoers
                        rule letting LLM_USER run it, so 30-benchmark.sh can compare
@@ -86,10 +88,13 @@ else
     info "apt packages present"
 fi
 
-if [[ -d $LLM_ROOT/stack/.git ]]; then
-    info "$LLM_ROOT/stack already cloned"
+repo=$LLM_ROOT/repo
+if [[ -e $LLM_ROOT/stack ]]; then
+    info "$LLM_ROOT/stack already present"
+elif [[ -d $repo/.git ]]; then
+    info "$repo already cloned"
 elif [[ -n $SOURCE ]] && ((USER_MODE)); then
-    run git clone "$SOURCE" "$LLM_ROOT/stack"
+    run git clone "$SOURCE" "$repo"
 elif [[ -n $SOURCE ]]; then
     safe=()
     # A local source owned by another user fails git's ownership check ("dubious ownership").
@@ -99,10 +104,17 @@ elif [[ -n $SOURCE ]]; then
     fi
     # Cloned as root because LLM_USER usually cannot read the source (e.g. under a 750 home).
     # --no-hardlinks: the chown below must not reach the source repo's object files.
-    run git "${safe[@]}" clone --no-hardlinks "$SOURCE" "$LLM_ROOT/stack"
-    run chown -R "$LLM_USER:$LLM_USER" "$LLM_ROOT/stack"
+    run git "${safe[@]}" clone --no-hardlinks "$SOURCE" "$repo"
+    run chown -R "$LLM_USER:$LLM_USER" "$repo"
 else
-    warn "$LLM_ROOT/stack missing; re-run with --source <repo> or clone it there as $LLM_USER"
+    warn "$LLM_ROOT/stack missing; re-run with --source <repo> or clone it to $repo as $LLM_USER"
+fi
+if [[ ! -e $LLM_ROOT/stack ]] && { [[ -d $repo/.git ]] || ((DRY_RUN)); }; then
+    # The repo root holds stack/ next to other files; a clone of the older stack-only repo has no stack/.
+    target=repo/stack
+    ((DRY_RUN)) || [[ -d $repo/stack ]] || target=repo
+    run ln -s "$target" "$LLM_ROOT/stack"
+    ((USER_MODE)) || run chown -h "$LLM_USER:$LLM_USER" "$LLM_ROOT/stack"
 fi
 
 venv=$LLM_ROOT/venv
