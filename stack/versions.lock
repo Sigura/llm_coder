@@ -4,6 +4,7 @@ model	deepseek-v4.1-flash-1017	unsloth/DeepSeek-V4.1-Flash-1017-GGUF	2688c0c3c2c
 model	deepseek-v4.1-flash-1017-gsq	ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF	65d53bc8be65123e255ff02f3ded958b6dbf54fd
 model	qwen3-coder-next-bf16	unsloth/Qwen3-Coder-Next-GGUF	ce09c67b53bc8739eef83fe67b2f5d293c270632
 model	qwen3.6-35b-a3b	unsloth/Qwen3.6-35B-A3B-GGUF	a483e9e6cbd595906af30beda3187c2663a1118c
+model	qwen3.6-35b-a3b-mtp	unsloth/Qwen3.6-35B-A3B-MTP-GGUF	5bc3e238d916f48a861bac2f8a1990a0e9b7e98d
 model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00001-of-00007.gguf	5780868	6b6e9ace54298156974cc3e024e5ba86d50c40c06482da8f64fece77d7f73452
 model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00002-of-00007.gguf	49290279808	fa56e7cb79f88d992170bbc41b192991bd89b9534c53106e328fc03a5d26afed
 model-file	deepseek-v4.1-flash-1017	UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00003-of-00007.gguf	49745070208	b279f9bbb331460d182658a9ec6a49eb232ef7d8c69600a2c53d5d797bf037b4
@@ -23,3 +24,4 @@ model-file	qwen3-coder-next-bf16	BF16/Qwen3-Coder-Next-BF16-00002-of-00004.gguf	
 model-file	qwen3-coder-next-bf16	BF16/Qwen3-Coder-Next-BF16-00003-of-00004.gguf	49447199840	83b2f953e1bf2f162588430b0110cb0938245f3bf7d488ff8ca15790b5790d37
 model-file	qwen3-coder-next-bf16	BF16/Qwen3-Coder-Next-BF16-00004-of-00004.gguf	11580824608	89280f8d77456c2ea0286646384bef74f96d06e4cdb9e65b7632aeb52f9ef499
 model-file	qwen3.6-35b-a3b	Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf	22360456160	707a55a8a4397ecde44de0c499d3e68c1ad1d240d1da65826b4949d1043f4450
+model-file	qwen3.6-35b-a3b-mtp	Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf	22853663008	55983c5a75a1ab969824077b3bb3de4146e82a9234072b48ad4e8f92ad3fe9f1
