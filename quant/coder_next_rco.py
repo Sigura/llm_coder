@@ -28,7 +28,6 @@ KLD_BASE = WORK / "kld/bf16.kld"
 DB = WORK / "db"
 SHARDS = WORK / "shards"
 VARIANTS = WORK / "variants"
-SWEEP = WORK / "sweep.json"
 OUT = WORK / "out"
 
 sys.path.insert(0, str(WORK / "gguf-py"))
@@ -196,30 +195,48 @@ def kld(model, log):
     return {"kld": float(mean.group(1)), "same_top_p": float(top.group(1)) if top else None}
 
 
-def cmd_sweep(_):
+def sweep_path(args):
+    return WORK / f"sweep{args.tag}.json"
+
+
+def base_choice(args):
+    """The mix every swap is measured against: BASE everywhere, or a plan's assignment (re-sweep rounds)."""
+    choice = {(kind, gi): BASE[kind] for kind in KINDS for gi in range(len(GROUPS))}
+    if args.base_plan:
+        choice.update({(x["kind"], x["group"]): x["type"] for x in json.loads(Path(args.base_plan).read_text())["assignment"]})
+    return choice
+
+
+def cmd_sweep(args):
     need(KLD_BASE, SHARDS / "rest.gguf")
-    done = json.loads(SWEEP.read_text()) if SWEEP.exists() else {"group": GROUP, "runs": {}}
+    path = sweep_path(args)
+    base = base_choice(args)
+    done = json.loads(path.read_text()) if path.exists() else {"group": GROUP, "base_plan": args.base_plan, "runs": {}}
     jobs = [("base", {})]
     for gi in range(len(GROUPS)):
         for kind, qs in OPTIONS.items():
-            jobs += [(f"g{gi:02d}-{kind}-{q}", {(kind, gi): q}) for q in qs if q != BASE[kind]]
+            jobs += [(f"g{gi:02d}-{kind}-{q}", {(kind, gi): q}) for q in qs if q != base[(kind, gi)]]
     jobs = [j for j in jobs if j[0] not in done["runs"]]
     print(f"{len(jobs)} variants to measure", flush=True)
-    logs = WORK / "sweep-logs"
+    logs = WORK / f"sweep{args.tag}-logs"
     logs.mkdir(parents=True, exist_ok=True)
     for key, choice in jobs:
-        first = make_variant("sweep", choice)
+        first = make_variant(f"sweep{args.tag}", {**base, **choice})
         r = kld(first, logs / f"{key}.log")
         r["bytes"] = variant_bytes(first)
         print(f"{key:24} kld {r['kld']:.6f}  top {r['same_top_p']}%  {r['bytes'] / 2**30:.3f} GiB", flush=True)
         done["runs"][key] = r
-        SWEEP.write_text(json.dumps(done, indent=1))
+        path.write_text(json.dumps(done, indent=1))
 
 
 def cmd_allocate(args):
-    need(SWEEP)
-    runs = json.loads(SWEEP.read_text())["runs"]
+    path = sweep_path(args)
+    need(path)
+    sweep = json.loads(path.read_text())
+    runs = sweep["runs"]
     base = runs["base"]
+    args.base_plan = sweep.get("base_plan")
+    base_q = base_choice(args)
     sizes = {(k, q, gi): shard_path(k, q, gi).stat().st_size
              for k, qs in OPTIONS.items() for q in qs for gi in range(len(GROUPS))}
     fixed = (SHARDS / "rest.gguf").stat().st_size
@@ -229,7 +246,8 @@ def cmd_allocate(args):
     items = []
     for gi in range(len(GROUPS)):
         for kind, qs in OPTIONS.items():
-            opts = [(q, sizes[(kind, q, gi)], 0.0 if q == BASE[kind] else runs[f"g{gi:02d}-{kind}-{q}"]["kld"] - base["kld"])
+            opts = [(q, sizes[(kind, q, gi)],
+                     0.0 if q == base_q[(kind, gi)] else runs[f"g{gi:02d}-{kind}-{q}"]["kld"] - base["kld"])
                     for q in qs]
             items.append((gi, kind, opts))
 
@@ -262,7 +280,7 @@ def cmd_allocate(args):
     chosen.reverse()
     total = fixed + sum(sizes[(x["kind"], x["type"], x["group"])] for x in chosen)
     plan = {"budget_gib": args.budget_gib, "bytes": total, "predicted_kld": base["kld"] + best[end], "assignment": chosen}
-    path = WORK / f"plan-{args.budget_gib:g}g.json"
+    path = WORK / f"plan-{args.budget_gib:g}g{args.tag}.json"
     path.write_text(json.dumps(plan, indent=1))
     for x in chosen:
         layers = GROUPS[x["group"]]
@@ -271,10 +289,10 @@ def cmd_allocate(args):
 
 
 def cmd_build(args):
-    path = WORK / f"plan-{args.budget_gib:g}g.json"
+    path = WORK / f"plan-{args.budget_gib:g}g{args.tag}.json"
     need(path)
     plan = json.loads(path.read_text())
-    name = f"rco-{args.budget_gib:g}g"
+    name = f"rco-{args.budget_gib:g}g{args.tag}"
     first = make_variant(name, {(x["kind"], x["group"]): x["type"] for x in plan["assignment"]})
     OUT.mkdir(parents=True, exist_ok=True)
     r = kld(first, OUT / f"{name}.kld.log")
@@ -294,10 +312,16 @@ def main():
     s.set_defaults(fn=cmd_imatrix)
     sub.add_parser("kld-base").set_defaults(fn=cmd_kld_base)
     sub.add_parser("quantize").set_defaults(fn=cmd_quantize)
-    sub.add_parser("sweep").set_defaults(fn=cmd_sweep)
+    s = sub.add_parser("sweep")
+    # Re-sweep round: measure one-group swaps around a plan's mix instead of BASE (group interactions shift the
+    # deltas, so the first additive allocation is only a starting point).
+    s.add_argument("--base-plan", help="plan-*.json whose assignment is the mix to swap around")
+    s.add_argument("--tag", default="", help="suffix for this round's sweep, plan and build files, e.g. --tag=-r2")
+    s.set_defaults(fn=cmd_sweep)
     for name, fn in [("allocate", cmd_allocate), ("build", cmd_build)]:
         s = sub.add_parser(name)
         s.add_argument("--budget-gib", type=float, required=True)
+        s.add_argument("--tag", default="")
         s.set_defaults(fn=fn)
     args = p.parse_args()
     args.fn(args)

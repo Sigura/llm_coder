@@ -7,6 +7,8 @@ dependencies:
   - cmake
   - ninja
   - shellcheck
+  - openjdk=21
+  - kotlin
   - cuda-version=13.0
   - cuda-nvcc
   - cuda-cudart-dev
