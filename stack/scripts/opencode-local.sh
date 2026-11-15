@@ -30,8 +30,15 @@ for id in $DEEP $SMALL $MAIN; do
 done
 
 load_model $DEEP
-jq --arg m "local-$MODEL_ID/$ALIAS" '.agent.deep = {mode: "primary", model: $m,
-    description: "DeepSeek V4.1 Flash: slower (~13 tok/s), for hard problems and long context (128k)"}' "$cfg" >"$cfg.tmp"
+# Review: DeepSeek scores best on the coding eval but reads and writes slowly, so it reviews outside the agent's
+# context (llm-review.sh: short prompt, task + files only) and answers in a few lines.
+jq --arg m "local-$MODEL_ID/$ALIAS" --arg instr "$STACK_DIR/config/opencode-review.md" '
+    .agent.deep = {mode: "primary", model: $m,
+      description: "DeepSeek V4.1 Flash: slower (~13 tok/s), for hard problems and long context (128k)"}
+  | .instructions = ((.instructions // []) - [$instr] + [$instr])
+  | .command.review = {description: "Independent DeepSeek review of the changes (llm-review.sh)",
+      template: "Run ~/llm_coder/stack/scripts/llm-review.sh on the code changed in this session (--diff in a git repo, else the changed files) with a --task that states what the code must do. Show its output, then fix the defects you agree with. Focus: $ARGUMENTS"}' \
+    "$cfg" >"$cfg.tmp"
 mv "$cfg.tmp" "$cfg"
 
 router_port=${ROUTER_PORT:-8090}
