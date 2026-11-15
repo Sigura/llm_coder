@@ -21,6 +21,7 @@ MIN_CACHED = 0.98
 MIN_NODE_SHARE = 0.6  # of an even 1/N share
 TEMP_HI = int(os.environ.get("TEMP_HI", 65))
 TEMP_LO = int(os.environ.get("TEMP_LO", 55))
+COOL_PLATEAU = 120
 
 
 def cpulist(text):
@@ -44,6 +45,16 @@ def temp(path):
         return int(f.read()) // 1000
 
 
+def cool_wait(tpath):
+    # The drive's idle temperature can sit above TEMP_LO (warm room, after a reboot), so also resume once it has
+    # stopped falling for COOL_PLATEAU seconds instead of waiting forever.
+    lowest, since = temp(tpath), time.time()
+    while (t := temp(tpath)) > TEMP_LO and time.time() - since < COOL_PLATEAU:
+        if t < lowest:
+            lowest, since = t, time.time()
+        time.sleep(5)
+
+
 def reader(node, nodes, cpus, files, tpath):
     os.sched_setaffinity(0, cpus)
     for name in files:
@@ -55,8 +66,7 @@ def reader(node, nodes, cpus, files, tpath):
             if since_check >= 1 << 30:
                 since_check = 0
                 if temp(tpath) >= TEMP_HI:
-                    while temp(tpath) > TEMP_LO:
-                        time.sleep(5)
+                    cool_wait(tpath)
             os.pread(fd, PIECE, off)
             off += nodes * PIECE
             since_check += PIECE
