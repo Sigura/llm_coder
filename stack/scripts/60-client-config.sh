@@ -4,7 +4,7 @@ source "$(dirname "$0")/lib.sh"
 
 usage() {
     cat <<EOF
-Usage: $0 [--dry-run] [--print-only] [--config <opencode.json>] [--server-ip IP] [--set-default] <model-id>
+Usage: $0 [--dry-run] [--print-only] [--config <opencode.json>] [--server-ip IP] [--set-default] [--set-small] <model-id>
 
 Writes an OpenCode provider for <model-id> (@ai-sdk/openai-compatible, "provider" key of the stable releases) and
 merges it into the OpenCode config (default: \${XDG_CONFIG_HOME:-~/.config}/opencode/opencode.json).
@@ -12,6 +12,7 @@ Other providers and settings are kept; the old file is backed up when it changes
 The API key is not written: the config references {env:CLIENT_KEY_ENV}. Run as the OpenCode user.
   --print-only   print the snippet, change nothing
   --set-default  also set the top-level "model" to this model
+  --set-small    also set the top-level "small_model" (titles, summaries) to this model
   --server-ip    address in baseURL (default: SERVER_IP from global.env, else first "hostname -I")
 EOF
 }
@@ -19,6 +20,7 @@ EOF
 MODEL=""
 PRINT_ONLY=0
 SET_DEFAULT=0
+SET_SMALL=0
 TARGET=${XDG_CONFIG_HOME:-$HOME/.config}/opencode/opencode.json
 IP=""
 while (($#)); do
@@ -27,6 +29,7 @@ while (($#)); do
     -n | --dry-run) DRY_RUN=1 ;;
     --print-only) PRINT_ONLY=1 ;;
     --set-default) SET_DEFAULT=1 ;;
+    --set-small) SET_SMALL=1 ;;
     --config) TARGET=$2; shift ;;
     --server-ip) IP=$2; shift ;;
     -*) die "unknown option $1" ;;
@@ -72,10 +75,11 @@ current='{}'
 if [[ -s $TARGET ]]; then
     current=$(jq . "$TARGET" 2>/dev/null) || die "$TARGET is not plain JSON (JSONC comments?); merge this by hand: $0 --print-only $MODEL"
 fi
-merged=$(jq --argjson s "$snippet" --arg p "$PROVIDER" --arg m "$PROVIDER/$ALIAS" --argjson def "$SET_DEFAULT" '
+merged=$(jq --argjson s "$snippet" --arg p "$PROVIDER" --arg m "$PROVIDER/$ALIAS" --argjson def "$SET_DEFAULT" --argjson small "$SET_SMALL" '
     .["$schema"] = $s["$schema"]
     | .provider[$p] = $s.provider[$p]
-    | if $def == 1 then .model = $m else . end' <<<"$current")
+    | if $def == 1 then .model = $m else . end
+    | if $small == 1 then .small_model = $m else . end' <<<"$current")
 
 if [[ $merged == "$current" ]]; then
     info "$TARGET already up to date ($PROVIDER/$ALIAS)"

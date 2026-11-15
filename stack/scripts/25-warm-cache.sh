@@ -4,13 +4,15 @@ source "$(dirname "$0")/lib.sh"
 
 usage() {
     cat <<EOF
-Usage: $0 [--dry-run] [--keep-others] <model-id>
+Usage: $0 [--dry-run] [--keep-others] [--force] <model-id>
 
 Loads <model-id>'s files into the page cache before serving or benchmarking it:
   1. drops the page-cache pages of every other configured model (posix_fadvise DONTNEED, no root needed),
      unless --keep-others; the kernel otherwise keeps the last model's pages and evicts the new one's first
-  2. drops <model-id>'s own pages, so pages cached earlier on the wrong NUMA nodes are placed again
-  3. reads every GGUF with one reader per NUMA node (warm_read.py): pages end up interleaved finely across
+  2. stops here if <model-id> is already cached and spread evenly over the NUMA nodes (warm_read.py --check,
+     ~20 s for 320 GB), unless --force
+  3. drops <model-id>'s own pages, so pages cached earlier on the wrong NUMA nodes are placed again
+  4. reads every GGUF with one reader per NUMA node (warm_read.py): pages end up interleaved finely across
      nodes (first-touch), the disk sees one sequential region at queue depth ~nodes, and reading pauses while
      the NVMe is at WARM_TEMP_HI C until it cools to WARM_TEMP_LO C
 llama.cpp's own mmap faulting reads the model as millions of random 4K reads; a single sequential reader puts
@@ -20,11 +22,13 @@ EOF
 
 MODEL=""
 KEEP_OTHERS=0
+FORCE=0
 while (($#)); do
     case $1 in
     -h | --help) usage; exit 0 ;;
     -n | --dry-run) DRY_RUN=1 ;;
     --keep-others) KEEP_OTHERS=1 ;;
+    --force) FORCE=1 ;;
     -*) die "unknown option $1" ;;
     *) MODEL=$1 ;;
     esac
@@ -51,10 +55,17 @@ if ((!KEEP_OTHERS)); then
         [[ $id == "$MODEL_ID" || ! -d $MODELS_DIR/$id/current ]] || evict "$MODELS_DIR/$id/current"
     done
 fi
-evict "$MODEL_CURRENT"
-
 mapfile -t files < <(find -L "$MODEL_CURRENT" -type f -name '*.gguf' -exec realpath {} + | sort -u)
 ((${#files[@]})) || die "no GGUF files under $MODEL_CURRENT"
+if ((!FORCE)); then
+    info "checking whether $MODEL_ID is already cached and NUMA-even"
+    if python3 -I "$STACK_DIR/scripts/warm_read.py" --check "${files[@]}"; then
+        info "already warm and even; skipping (use --force to re-read)"
+        exit 0
+    fi
+fi
+evict "$MODEL_CURRENT"
+
 info "warming ${#files[@]} files of $MODEL_ID (pause at ${WARM_TEMP_HI}C until ${WARM_TEMP_LO}C)"
 ((DRY_RUN)) && exit 0
 TEMP_HI=$WARM_TEMP_HI TEMP_LO=$WARM_TEMP_LO python3 -I "$STACK_DIR/scripts/warm_read.py" "${files[@]}"
