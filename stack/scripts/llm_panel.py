@@ -408,7 +408,7 @@ class Host:
         vm = read_kv("/proc/vmstat", {"pgmajfault", "pgsteal_kswapd", "pgsteal_direct", "pgsteal_khugepaged"})
         cur = {"t": now, "majflt": vm["pgmajfault"], "steal": sum(v for k, v in vm.items() if k.startswith("pgsteal")),
                "cpu": self.cpu_ticks()}
-        s = {"mem": read_kv("/proc/meminfo", {"MemTotal", "MemFree", "Cached"}), "node_mem": {}, "rates": None,
+        s = {"mem": read_kv("/proc/meminfo", {"MemTotal", "MemFree", "Buffers", "Cached", "SReclaimable"}), "node_mem": {}, "rates": None,
              "cpu": None, "nvme": warm_read.temp(self.nvme) if self.nvme else None}
         for n in self.nodes:
             s["node_mem"][n] = read_kv(f"/sys/devices/system/node/node{n}/meminfo", {"MemFree", "FilePages"}, 3)
@@ -454,8 +454,12 @@ FAULTS_HOT = 1000  # per second; a warm model takes almost none
 def host_lines(h, gpus, gpu_err, owners):
     mem = h["mem"]
     nvme = f"nvme {h['nvme']}C" if h["nvme"] is not None else "nvme ?"
-    lines = [(f"RAM free {mem['MemFree'] / GIB_KB:.1f} of {mem['MemTotal'] / GIB_KB:.0f} GiB   "
-              f"page cache {mem['Cached'] / GIB_KB:.0f} GiB   {nvme}", None)]
+    # Host monitors report "used" like free(1): page cache does not count, although the mmapped weights live there.
+    cache = mem["Buffers"] + mem["Cached"] + mem["SReclaimable"]
+    used = mem["MemTotal"] - mem["MemFree"] - cache
+    lines = [(f"RAM {mem['MemTotal'] / GIB_KB:.0f} GiB: used by programs {used / GIB_KB:.0f}, "
+              f"page cache {cache / GIB_KB:.0f} (files incl. mmapped model weights, evictable), "
+              f"free {mem['MemFree'] / GIB_KB:.1f}   {nvme}", None)]
     faults, freed = h["rates"] or (None, None)
     lines.append((f"pages read from disk (major faults) {'-' if faults is None else f'{faults:,.0f}'}/s: "
                   "a mmapped page (model weights) was not in RAM", "bad" if faults and faults >= FAULTS_HOT else None))
