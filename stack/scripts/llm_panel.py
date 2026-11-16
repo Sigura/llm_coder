@@ -267,7 +267,7 @@ def warmup_text(lg):
 
 
 def history_lines(lg, now, n=6):
-    return [f"{what:<36} {age(now - t) + ' ago':>12}  {hms(t)}" for t, what in reversed(lg.history[-n:])]
+    return [f"{what:<44} {age(now - t) + ' ago':>12}  {hms(t)}" for t, what in reversed(lg.history[-n:])]
 
 
 def status(model_id, log_path):
