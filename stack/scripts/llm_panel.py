@@ -463,7 +463,15 @@ def collect(models, host):
     return host.sample(), gpus, err
 
 
+def print_frame(models, sample, interval):
+    width = shutil.get_terminal_size((120, 50)).columns
+    print("\n".join(text for text, _ in frame(models, *sample, width, interval)))
+
+
 def run_curses(models, host, interval):
+    """Runs until q or Ctrl-C, then leaves the last frame on the terminal as --once would print it."""
+    last = []
+
     def loop(scr):
         curses.curs_set(0)
         attrs = {None: curses.A_NORMAL, "title": curses.A_BOLD, "dim": curses.A_DIM}
@@ -478,17 +486,22 @@ def run_curses(models, host, interval):
         while True:
             if time.monotonic() >= next_sample:
                 next_sample = time.monotonic() + interval
-                h, gpus, err = collect(models, host)
+                last[:] = [collect(models, host)]
             rows, cols = scr.getmaxyx()
             scr.erase()
-            for y, (text, color) in enumerate(frame(models, h, gpus, err, cols, interval)[:rows]):
+            for y, (text, color) in enumerate(frame(models, *last[0], cols, interval)[:rows]):
                 scr.addnstr(y, 0, text, cols - 1, attrs.get(color, curses.A_NORMAL))
             scr.refresh()
             scr.timeout(max(int((next_sample - time.monotonic()) * 1000), 1))
             if scr.getch() in (ord("q"), ord("Q")):
                 return
 
-    curses.wrapper(loop)
+    try:
+        curses.wrapper(loop)
+    except KeyboardInterrupt:
+        pass
+    if last:
+        print_frame(models, last[0], interval)
 
 
 def main():
@@ -511,9 +524,7 @@ def main():
     if a.once:
         host.sample()
         time.sleep(1)
-        h, gpus, err = collect(models, host)
-        width = shutil.get_terminal_size((120, 50)).columns
-        print("\n".join(text for text, _ in frame(models, h, gpus, err, width, a.interval)))
+        print_frame(models, collect(models, host), a.interval)
         return
     if a.residency_every > 0:
         threading.Thread(target=residency_loop, args=(models, a.residency_every), daemon=True).start()
