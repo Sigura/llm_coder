@@ -14,6 +14,7 @@ import argparse
 import curses
 import glob
 import locale
+import math
 import os
 import re
 import shutil
@@ -39,6 +40,8 @@ WARMING = re.compile(r"^   warming: (\d+)/(\d+) GiB \((\d+)%\) in (\d+) s, nvme 
 CACHED = re.compile(r"cached ([\d.]+)% of sampled pages; per NUMA node: ([\d.% ]*)")
 SPAWN = re.compile(r"spawning server instance with name=\S+ on port (\d+)")
 EXITED = re.compile(r"exited with status (\S+)")
+LOAD_ARG = re.compile(r"\bload: +(\S+)$")
+N_SLOTS = re.compile(r"n_slots = (\d+)")
 SLOT = re.compile(r": id +(\d+) \| task ")
 PROMPT = re.compile(r"prompt processing, n_tokens = +(\d+), progress = ([\d.]+), t = +([\d.]+) s / +([\d.]+) tokens per")
 NGEN = re.compile(r"n_gen = +(\d+), tg = +([\d.]+) t/s")
@@ -59,12 +62,21 @@ class ServeLog:
         self.slots = {}
         self.last_prompt = self.last_gen = None  # (tokens, seconds, tok/s, time)
         self.warn = ""
-        self.cache = None  # (fraction, per-node shares, time) from warm_read lines in the log
+        self.cache = None  # (fraction, per-node shares, time, after warm-up) from warm_read lines in the log
+        self.warmup = {}  # start, end, read (warm_read's summary), skipped
+        self.n_slots = self.batch = None
+        self.prev_arg = ""
+        self.history = []  # (time, event)
+        if start:
+            self.event("service started")
 
     def set(self, phase, detail="", progress=None):
         if phase != self.phase:
             self.phase, self.since = phase, self.t
         self.detail, self.progress = detail, progress
+
+    def event(self, what):
+        self.history = self.history[-49:] + [(self.t, what)]
 
     def feed(self, line):
         line = line.rstrip("\n")
@@ -80,37 +92,60 @@ class ServeLog:
 
         if "25-warm-cache: checking" in line:
             self.set("warm-up: checking the page cache")
+            self.warmup = {"start": self.t}
+            self.event("warm-up started")
         elif "25-warm-cache: warming" in line:
             self.set("warm-up: reading the model", progress=0.0)
+            self.event("warm-up reading the model")
         elif m := WARMING.match(line):
             self.set("warm-up: reading the model", f"{m[1]}/{m[2]} GiB in {m[4]} s, nvme {m[5]}C", int(m[3]) / 100)
         elif line.startswith("   read ") and " GiB in " in line:
             self.set(self.phase, line.strip(), 1.0)
+            self.warmup["read"] = line.strip()
+        elif "25-warm-cache: done" in line:
+            self.warmup["end"] = self.t
+            self.event("warm-up done")
         elif "25-warm-cache: residency after warming" in line:
             self.set("warm-up: checking residency")
         elif "already warm and even" in line:
             self.set("warm-up: skipped, already cached")
+            self.warmup["skipped"] = True
         elif "is not fully cached or not NUMA-even" in line:
             self.warn = "warm-up ended with the model partly evicted"
         elif m := CACHED.search(line):
-            self.cache = (float(m[1]) / 100, [float(s) for s in m[2].replace("%", " ").split()], self.t)
+            after = self.phase == "warm-up: checking residency"
+            self.cache = (float(m[1]) / 100, [float(s) for s in m[2].replace("%", " ").split()], self.t, after)
         elif "llm-serve: exec:" in line:
             self.router_t0 = self.t
             self.set("router up, model not loaded", "loads on the first request")
+            self.event("router up")
         elif m := SPAWN.search(line):
             self.child_t0[m[1]] = self.t
             self.slots = {}
             self.set("loading weights")
+            self.event("model loading start")
+        elif m := LOAD_ARG.search(line):
+            if self.prev_arg in ("-b", "--batch-size"):
+                self.batch = int(m[1])
+            self.prev_arg = m[1]
         elif "model loaded" in line:
             self.set("idle")
+            self.event("model in RAM")
+        elif m := N_SLOTS.search(line):
+            self.n_slots = int(m[1])
         elif "entering sleeping state" in line:
+            if self.phase != "sleeping":
+                self.event("sleeping")
             self.slots = {}
             self.set("sleeping", "weights unloaded after idle")
         elif "exiting sleeping state" in line:
+            if self.phase != "waking up":
+                self.event("waking up")
             self.set("waking up")
         elif m := EXITED.search(line):
             self.slots = {}
             self.set("model instance exited", f"status {m[1]}")
+            self.event(f"model instance exited, status {m[1]}")
         elif m := SLOT.search(line):
             self.slot_event(m[1], line)
 
@@ -124,13 +159,15 @@ class ServeLog:
             return
         if "stop processing" in line:
             self.slots.pop(sid, None)
+            self.event(f"request finished (slot {sid})")
             if not self.slots:
                 self.set("idle")
             return
         if "processing task" in line:
-            self.slots[sid] = {"phase": "request started", "since": self.t, "started": self.t, "n": 0,
-                               "progress": 0.0, "avg": None, "now": None, "mark": (0, 0.0), "tg": None}
+            self.slots[sid] = {"phase": "prompt processing", "since": self.t, "started": self.t, "n": 0,
+                               "progress": 0.0, "avg": None, "now": None, "mark": (0, 0.0), "tg": None, "chunks": 0}
             self.set("busy")
+            self.event(f"request started (slot {sid})")
             return
         s = self.slots.get(sid)
         if s is None:
@@ -141,13 +178,22 @@ class ServeLog:
             n0, e0 = s["mark"]
             if elapsed > e0:
                 s["now"] = (n - n0) / (elapsed - e0)
-            s.update(n=n, progress=p, avg=float(m[4]), mark=(n, elapsed))
+            s.update(n=n, progress=p, avg=float(m[4]), mark=(n, elapsed), chunks=s["chunks"] + 1)
             phase = "generating" if p >= 1 else "prompt processing"
+            if phase == "generating" and s["phase"] != phase:
+                self.event(f"prompt processed (slot {sid}), {n} tokens")
         elif m := NGEN.search(line):
             s["tg"] = float(m[2])
             phase = "generating"
         if phase != s["phase"]:
             s["phase"], s["since"] = phase, self.t
+
+    def chunks(self, s):
+        """'done/total' prompt chunks of a slot; llama-server logs progress once per --batch-size chunk."""
+        total = "?"
+        if s["progress"] and self.batch:
+            total = max(math.ceil(s["n"] / s["progress"] / self.batch), s["chunks"])
+        return f"{min(s['chunks'], total) if total != '?' else s['chunks']}/{total}"
 
 
 def find_log(model_id):
@@ -182,15 +228,19 @@ def hms(t):
 def phase_entries(lg, now):
     """(name, progress or None, detail, color) per busy slot, or one for the model when no slot is busy."""
     if lg.slots:
+        yield f"prompts in inference: {len(lg.slots)} (slot {', '.join(sorted(lg.slots))})" + \
+            (f" of {lg.n_slots} slots" if lg.n_slots else ""), None, "", "busy"
         for sid, s in sorted(lg.slots.items()):
+            chunks = f"chunks done {lg.chunks(s)} ({lg.batch or '?'} tokens each)"
+            progress = s["progress"] if s["phase"] == "prompt processing" else None
+            yield f"slot {sid} {s['phase']}", progress, chunks if progress is not None else "", "busy"
             parts = []
             if s["n"]:
                 parts.append(f"{s['n']} tok, {s['now']:.1f} tok/s now, {s['avg']:.1f} avg")
             if s["tg"] is not None:
                 parts.append(f"{s['tg']:.1f} t/s")
             parts.append(f"for {age(now - s['since'])}, request {age(now - s['started'])}")
-            progress = s["progress"] if s["phase"] == "prompt processing" else None
-            yield f"slot {sid} {s['phase']}", progress, ", ".join(parts), "busy"
+            yield "      ", None, ", ".join(parts), "busy"
         return
     color = {"idle": "ok", "sleeping": "ok", "router up, model not loaded": "ok", "model instance exited": "bad"}
     detail = ", ".join(p for p in (lg.detail, f"for {age(now - lg.since) if lg.since else '?'}") if p)
@@ -206,6 +256,20 @@ def last_text(lg):
     return out
 
 
+def warmup_text(lg):
+    w = lg.warmup
+    if not w:
+        return "warm-up none since the service start"
+    if w.get("skipped"):
+        return f"warm-up skipped at {hms(w['start'])}: already cached and NUMA-even"
+    span = f"{hms(w['start'])} - {hms(w['end'])}" if "end" in w else f"since {hms(w['start'])}, running"
+    return f"warm-up {span}" + (f": {w['read']}" if "read" in w else "")
+
+
+def history_lines(lg, now, n=6):
+    return [f"{what:<36} {age(now - t) + ' ago':>12}  {hms(t)}" for t, what in reversed(lg.history[-n:])]
+
+
 def status(model_id, log_path):
     path = log_path or find_log(model_id)
     if not path:
@@ -218,13 +282,19 @@ def status(model_id, log_path):
     print(f"== {model_id}  ({path}, last write {hms(os.path.getmtime(path))}, now {hms(now)})")
     for i, (name, progress, detail, _) in enumerate(phase_entries(lg, now)):
         pct = f" {progress:.0%}" if progress is not None else ""
+        if not name.strip():
+            print(f"        {name}{detail}")
+            continue
         print(f"{'phase:  ' if i == 0 else '        '}{name}{pct}" + (f"  ({detail})" if detail else ""))
     if lg.start:
         print(f"started: {datetime.fromtimestamp(lg.start).astimezone().isoformat(timespec='seconds')}")
     for i, text in enumerate(last_text(lg)):
         print(f"{'last:   ' if i == 0 else '        '}{text}")
+    print(warmup_text(lg))
     if lg.warn:
         print(f"WARN:   {lg.warn}")
+    for i, text in enumerate(history_lines(lg, now)):
+        print(f"{'history: ' if i == 0 else '         '}{text}")
 
 
 class Model:
@@ -378,15 +448,19 @@ def bar(frac, width=20):
 
 
 GIB_KB = 1 << 20
+FAULTS_HOT = 1000  # per second; a warm model takes almost none
 
 
 def host_lines(h, gpus, gpu_err, owners):
     mem = h["mem"]
-    rates = f"major faults {h['rates'][0]:,.0f}/s   reclaimed {h['rates'][1]:,.0f} pages/s" if h["rates"] \
-        else "major faults -/s   reclaimed -/s"
     nvme = f"nvme {h['nvme']}C" if h["nvme"] is not None else "nvme ?"
     lines = [(f"RAM free {mem['MemFree'] / GIB_KB:.1f} of {mem['MemTotal'] / GIB_KB:.0f} GiB   "
-              f"page cache {mem['Cached'] / GIB_KB:.0f} GiB   {rates}   {nvme}", None)]
+              f"page cache {mem['Cached'] / GIB_KB:.0f} GiB   {nvme}", None)]
+    faults, freed = h["rates"] or (None, None)
+    lines.append((f"pages read from disk (major faults) {'-' if faults is None else f'{faults:,.0f}'}/s: "
+                  "a mmapped page (model weights) was not in RAM", "bad" if faults and faults >= FAULTS_HOT else None))
+    lines.append((f"page cache freed (pgsteal) {'-' if freed is None else f'{freed:,.0f}'} pages/s: "
+                  "the kernel evicts cached files, model weights too, to make room", "bad" if freed and freed >= FAULTS_HOT else None))
     nodes = sorted(h["node_mem"])
     lines.append(("node        " + "".join(f"{n:>7}" for n in nodes), "dim"))
     lines.append(("free GiB    " + "".join(f"{h['node_mem'][n]['MemFree'] / GIB_KB:7.1f}" for n in nodes), None))
@@ -411,26 +485,40 @@ def model_lines(m, now):
     for name, progress, detail, color in phase_entries(lg, now):
         pb = f"  {bar(progress)} {progress:4.0%}" if progress is not None else ""
         lines.append((f"{name}{pb}  {detail}", color))
-    last = last_text(lg)
-    lines.append(("last  " + "   ".join(last) if last else "last  no finished request since start", None))
-    if m.res:
-        frac, shares, ok, at, took = m.res
-        verdict, color = ("cached, NUMA-even", "ok") if ok else \
-            ("EVICTED: CPU layers read from disk", "bad") if frac < warm_read.MIN_CACHED else ("uneven over NUMA nodes", "busy")
-        lines.append((f"cache {frac:.1%}  per node " + " ".join(f"{s:.0f}" for s in shares) +
-                      f" %   {verdict}   scanned {age(now - at)} ago in {took:.0f} s" +
-                      ("  (rescanning)" if m.scanning else ""), color))
-    elif m.res_err:
-        lines.append((f"cache {m.res_err}", "bad"))
-    else:
-        lines.append(("cache scanning..." if m.scanning else "cache not scanned yet", "dim"))
-    if lg.cache:
-        frac, shares, t = lg.cache
-        lines.append((f"log   warm-up saw {frac:.1%} cached at {hms(t)}", "dim"))
+    lines.append((warmup_text(lg), None))
+    lines.append(cache_line(m, now))
     if lg.warn:
         lines.append((f"WARN  {lg.warn}", "bad"))
+    last = last_text(lg)
+    lines.append(("last  " + "   ".join(last) if last else "last  no finished request since start", None))
+    for i, text in enumerate(history_lines(lg, now)):
+        lines.append((("history " if i == 0 else " " * 8) + text, "dim" if i else None))
     lines.append((f"log   {m.log_path}, last write {age(now - os.path.getmtime(m.log_path))} ago", "dim"))
     return lines
+
+
+def cache_line(m, now):
+    """How much of the model is in RAM: the last scan, else warm_read's last check in the log. Anything below
+    warm_read.MIN_CACHED is red: the missing part is read from the NVMe on every prompt chunk."""
+    scanning = f"scanning for {age(now - m.scan_at)}" if m.scanning else ""
+    if m.res:
+        frac, shares, ok, at, took = m.res
+        source = f"scanned {age(now - at)} ago in {took:.0f} s" + (f", {scanning}" if scanning else "")
+    elif m.log.cache:
+        frac, shares, at, after = m.log.cache
+        ok = None
+        source = f"from the warm-up log at {hms(at)}{'' if after else ', before reading'}; " + \
+            (scanning or m.res_err or "not scanned yet")
+    else:
+        return (f"cache {scanning or m.res_err or 'not scanned yet'}", "bad" if m.res_err else "dim")
+    if frac < warm_read.MIN_CACHED:
+        verdict, color = f"EVICTED: {1 - frac:.0%} of the model is read from disk", "bad"
+    elif ok is False:
+        verdict, color = "uneven over NUMA nodes", "busy"
+    else:
+        verdict, color = "in RAM", "ok"
+    return (f"cache {frac:.1%} in RAM  {verdict}  ({source})  per node " +
+            " ".join(f"{s:.0f}" for s in shares) + " %", color)
 
 
 def frame(models, host, gpus, gpu_err, width, interval):
