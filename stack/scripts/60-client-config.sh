@@ -52,7 +52,7 @@ PROVIDER=${CLIENT_PROVIDER_ID:-local-$MODEL_ID}
 snippet=$(jq -n \
     --arg p "$PROVIDER" --arg url "http://$IP:$PORT/v1" --arg env "$CLIENT_KEY_ENV" \
     --arg alias "$ALIAS" --arg name "${CLIENT_MODEL_NAME:-$ALIAS}" \
-    --argjson ctx "$CTX" --argjson out "$OUTPUT_LIMIT" --argjson timeout "$CLIENT_TIMEOUT_MS" \
+    --argjson ctx "$SLOT_CTX" --argjson out "$OUTPUT_LIMIT" --argjson timeout "$CLIENT_TIMEOUT_MS" \
     --argjson reasoning "$([[ ${REASONING:-0} == 1 ]] && echo true || echo false)" '
     {"$schema": "https://opencode.ai/config.json",
      provider: {($p): {

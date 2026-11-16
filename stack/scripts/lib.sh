@@ -152,7 +152,11 @@ load_model() {
     MODEL_PATH=$MODEL_CURRENT/$MAIN_GGUF
     KEY_FILE=$SECRETS_DIR/$MODEL_ID.key
     SERVICE=llm@$MODEL_ID.service
-    export MODEL_DIR MODEL_CURRENT MODEL_PREVIOUS REV_DIR MODEL_PATH KEY_FILE SERVICE
+    # llama-server splits -c evenly over its --parallel slots; clients see one slot's share.
+    local slots=1
+    [[ " ${EXTRA_ARGS:-} " =~ [[:space:]](--parallel|-np)[[:space:]]+([0-9]+) ]] && slots=${BASH_REMATCH[2]}
+    SLOT_CTX=$((CTX / slots))
+    export MODEL_DIR MODEL_CURRENT MODEL_PREVIOUS REV_DIR MODEL_PATH KEY_FILE SERVICE SLOT_CTX
 }
 
 # fnmatch-style glob (as used by hf --include: * and ? also match "/") -> anchored ERE

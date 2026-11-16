@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # Usage: llm-review.sh [--model <model-id>] [--diff] --task "<what the code must do>" [file...]
 # Independent code review outside the agent's context: sends only a short reviewer prompt, the task and the given
-# files (and/or `git diff HEAD` with --diff) to a local model (default DeepSeek on 8080, thinking off) and prints its
-# verdict: "OK" or at most 10 lines "path:line: problem -> fix". The small prompt keeps DeepSeek's slow prefill short.
+# files (and/or `git diff HEAD` with --diff) to a local model (default Qwen3.6 MTP on 8085, thinking off) and prints
+# its verdict: "OK" or at most 10 lines "path:line: problem -> fix". On the coding eval a reviewer added ~4-5 tasks to
+# Qwen3.8, and Qwen3.6 MTP did as well as DeepSeek at ~60% of the time; --model deepseek-v4.1-flash-1017 for DeepSeek.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 require_cmd curl jq
 load_global
 
-MODEL=deepseek-v4.1-flash-1017 TASK="" DIFF=0
+MODEL=qwen3.6-35b-a3b-mtp TASK="" DIFF=0
 while (($#)); do
     case $1 in
     --model) MODEL=$2; shift ;;
     --task) TASK=$2; shift ;;
     --diff) DIFF=1 ;;
-    -h | --help) sed -n '2,5p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,6p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) break ;;
     esac
