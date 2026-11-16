@@ -22,7 +22,7 @@ for spec in "$@"; do
     [[ $spec == *:* ]] && limit=${spec#*:}
     load_model "$id"
     tiers+=(--tier "$id=http://$upstream:$PORT,$ALIAS,$KEY_FILE,$limit")
-    ctx=$CTX
+    ctx=$SLOT_CTX
     info "tier $id: port $PORT, alias $ALIAS, prompt limit ${limit/#0/none}"
 done
 

@@ -10,6 +10,7 @@ Starts llama-server for <model-id> in the foreground with the numactl prefix and
 arguments derived from config/global.env + config/models/<model-id>.env.
 It runs in router mode: nothing is loaded at start, the first request spawns the
 model instance, which frees its weights after SLEEP_IDLE_SEC idle seconds.
+With WARM_CACHE=1 in the model .env it runs 25-warm-cache.sh <model-id> first.
 This is the ExecStart of systemd/llm@.service; output goes to stdout/journald.
 --dry-run prints the command instead of running it.
 EOF
@@ -55,5 +56,6 @@ if ((DRY_RUN)); then
     exit 0
 fi
 echo "$preset" >"$PRESET"
+[[ ${WARM_CACHE:-0} == 1 ]] && "$STACK_DIR/scripts/25-warm-cache.sh" "$MODEL"
 info "exec: ${SERVER_CMD[*]}"
 exec "${SERVER_CMD[@]}"
