@@ -10,7 +10,9 @@ the NUMA nodes, and exits 0 only if nearly everything is cached and every node h
 """
 import ctypes
 import glob
+import mmap
 import os
+import struct
 import sys
 import time
 
@@ -22,6 +24,7 @@ MIN_NODE_SHARE = 0.6  # of an even 1/N share
 TEMP_HI = int(os.environ.get("TEMP_HI", 65))
 TEMP_LO = int(os.environ.get("TEMP_LO", 55))
 COOL_PLATEAU = 120
+PROGRESS_EVERY = 30
 
 
 def cpulist(text):
@@ -55,8 +58,9 @@ def cool_wait(tpath):
         time.sleep(5)
 
 
-def reader(node, nodes, cpus, files, tpath):
+def reader(node, nodes, cpus, files, tpath, done):
     os.sched_setaffinity(0, cpus)
+    read = 0
     for name in files:
         fd = os.open(name, os.O_RDONLY)
         size = os.fstat(fd).st_size
@@ -67,7 +71,8 @@ def reader(node, nodes, cpus, files, tpath):
                 since_check = 0
                 if temp(tpath) >= TEMP_HI:
                     cool_wait(tpath)
-            os.pread(fd, PIECE, off)
+            read += len(os.pread(fd, PIECE, off))
+            struct.pack_into("q", done, node * 8, read)
             off += nodes * PIECE
             since_check += PIECE
         os.close(fd)
@@ -122,19 +127,30 @@ def main():
     tpath = nvme_temp_path()
     node_dirs = sorted(glob.glob("/sys/devices/system/node/node[0-9]*"), key=lambda p: int(p.rsplit("node", 1)[1]))
     nodes = [cpulist(open(f"{d}/cpulist").read()) for d in node_dirs]
+    total = sum(os.path.getsize(f) for f in files)
+    done = mmap.mmap(-1, 8 * len(nodes))  # per-reader byte counters, shared with the forked readers
     t0 = time.time()
     pids = []
     for n, cpus in enumerate(nodes):
         pid = os.fork()
         if pid == 0:
-            reader(n, len(nodes), cpus, files, tpath)
+            reader(n, len(nodes), cpus, files, tpath, done)
             os._exit(0)
         pids.append(pid)
-    for pid in pids:
-        _, status = os.waitpid(pid, 0)
-        if status:
-            sys.exit(f"reader {pid} failed: {status}")
-    total = sum(os.path.getsize(f) for f in files)
+    running, next_report = set(pids), t0 + PROGRESS_EVERY
+    while running:
+        for pid in list(running):
+            got, status = os.waitpid(pid, os.WNOHANG)
+            if got:
+                running.discard(pid)
+                if status:
+                    sys.exit(f"reader {pid} failed: {status}")
+        if running and time.time() >= next_report:
+            next_report += PROGRESS_EVERY
+            got = sum(struct.unpack_from(f"{len(nodes)}q", done))
+            print(f"   warming: {got >> 30}/{total >> 30} GiB ({got / total:.0%}) in {time.time() - t0:.0f} s, "
+                  f"nvme {temp(tpath)}C", flush=True)
+        time.sleep(1)
     print(f"   read {total >> 30} GiB in {time.time() - t0:.0f} s with {len(nodes)} node-pinned readers, nvme {temp(tpath)}C")
 
 

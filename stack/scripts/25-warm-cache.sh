@@ -69,4 +69,8 @@ evict "$MODEL_CURRENT"
 info "warming ${#files[@]} files of $MODEL_ID (pause at ${WARM_TEMP_HI}C until ${WARM_TEMP_LO}C)"
 ((DRY_RUN)) && exit 0
 TEMP_HI=$WARM_TEMP_HI TEMP_LO=$WARM_TEMP_LO python3 -I "$STACK_DIR/scripts/warm_read.py" "${files[@]}"
+# Other page-cache users can evict the model while it is still being read; a short read here means slow prefill.
+info "residency after warming:"
+python3 -I "$STACK_DIR/scripts/warm_read.py" --check "${files[@]}" ||
+    warn "$MODEL_ID is not fully cached or not NUMA-even after warming: RAM is short (see MemFree), expect slow prefill"
 info "done"
