@@ -13,6 +13,14 @@ dependencies:
   - cuda-nvcc
   - cuda-cudart-dev
   - libcublas-dev
+  - libnuma
+  - libhwloc
+  - libcublas-static
+  - cuda-cudart-static
+  - pkg-config
+  - libxml2-devel
+  - cuda-profiler-api
+  - cuda-culibos-static
   - pip
   - pip:
       - huggingface_hub[hf_xet]==2.3.0
