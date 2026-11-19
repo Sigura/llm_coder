@@ -60,7 +60,7 @@ fetch() { # <repo> <rev> <dir> <include regex>
     evict_loop "$dir" &
     local ev=$!
     until aria2c -i "$list" -d "$dir" -j 1 -x "$CONNS" -s "$CONNS" -k 64M -c --file-allocation=falloc --auto-file-renaming=false \
-        --allow-overwrite=false --max-tries=0 --retry-wait=30 --check-integrity=true --summary-interval=600 \
+        --allow-overwrite=false --max-tries=0 --retry-wait=30 --timeout=30 --lowest-speed-limit=20K --check-integrity=true --summary-interval=600 \
         --console-log-level=warn; do
         attempt=$((attempt + 1))
         log "download of $repo failed (attempt $attempt), retrying in ${RETRY_SEC}s"
