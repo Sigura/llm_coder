@@ -16,6 +16,16 @@ declare -A CONFIGS=(
     [cpu-23936-0.95]="cpu|--moe-cache-mib 23936 --moe-cache-cpu-share 0.95"
     [cpu-23936-0.98]="cpu|--moe-cache-mib 23936 --moe-cache-cpu-share 0.98"
     [cpu-23936-1]="cpu|--moe-cache-mib 23936 --moe-cache-cpu-share 1"
+    # larger ubatches: fewer expert uploads per prompt, but the compute buffer (~5.4 GiB per GPU at -ub 2048)
+    # grows with the ubatch and takes VRAM from the cache
+    [ub3072-17920]="cpu|--moe-cache-mib 17920 --moe-cache-cpu-share 0.95 -ub 3072"
+    [ub4096-12800]="cpu|--moe-cache-mib 12800 --moe-cache-cpu-share 0.95 -ub 4096"
+    # -ub 3072 under -b 4096 still splits each batch into two ubatches; measured compute buffers at -ub 4096:
+    # 6.5 GiB on CUDA0, 10.2 GiB on CUDA1
+    [ub4096-17920]="cpu|--moe-cache-mib 17920 --moe-cache-cpu-share 0.95 -ub 4096"
+    # -ub 8192 needs a 20.5 GiB compute buffer on CUDA1: does not fit
+    [ub8192-4096]="cpu|--moe-cache-mib 4096 --moe-cache-cpu-share 0.95 -b 8192 -ub 8192"
+    [ub6144-6144]="cpu|--moe-cache-mib 6144 --moe-cache-cpu-share 0.95 -b 6144 -ub 6144"
 )
 ORDER=(base cpu-23936-0.95 cpu-23936-0.98 cpu-23936-1)
 (($#)) && ORDER=("$@")
@@ -25,7 +35,7 @@ load_model "$MODEL"
 require_cmd curl jq nvidia-smi
 API_KEY=$(api_key)
 BASE=http://127.0.0.1:$BENCH_PORT
-OUT=$RESULTS_DIR/moe-cache-$(date +%F)/check
+OUT=${OUT:-$RESULTS_DIR/moe-cache-$(date +%F)/check}
 mkdir -p "$OUT"
 ot_args=$(sed -E 's/ --moe-cache-(mib|cpu-share) [^ ]+//g' <<<"$EXTRA_ARGS")
 
