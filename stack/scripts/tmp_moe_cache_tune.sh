@@ -9,7 +9,7 @@ source "$(dirname "$0")/lib.sh"
 
 MODEL=deepseek-v4.1-flash-1017
 VARIANTS=("$@")
-((${#VARIANTS[@]})) || VARIANTS=(ot cpu)
+((${#VARIANTS[@]})) || VARIANTS=(cpu ot)
 
 load_global
 load_model "$MODEL"
@@ -51,8 +51,16 @@ for v in "${VARIANTS[@]}"; do
         fi
     done
     [[ $v == ot || $v == cpu ]] || die "unknown variant $v (ot or cpu)"
-    info "step 4/$v: tune, runs in $OUT/$v"
+    # the tuner's first cache size is 10% of the host experts (~18 GiB), more than the VRAM left in the ot layout
+    small=0.10
+    [[ $v == ot ]] && small=0.02
+    # the tuner measures the room on the first cache device only, the cache is split over both GPUs
+    sed -e "s/small = rnd(0.10 \* expert_mib(model))/small = rnd($small * expert_mib(model))/" \
+        -e "s/room = int(free - used - 512)$/room = 2 * int(free - used - 512)/" "$TUNE" >"$OUT/tune-$v.py"
+    grep -q "small = rnd($small \*" "$OUT/tune-$v.py" || die "could not set the small cache size in $OUT/tune-$v.py"
+    grep -q "room = 2 \* int" "$OUT/tune-$v.py" || die "could not set the cache room in $OUT/tune-$v.py"
+    info "step 4/$v: tune (first cache size ${small} of the host experts), runs in $OUT/$v"
     info "command: ${cmd[*]}"
-    python3 "$TUNE" --out "$OUT/$v" --markdown -- "${cmd[@]}" | tee "$OUT/$v.md"
+    python3 "$OUT/tune-$v.py" --out "$OUT/$v" --markdown -- "${cmd[@]}" | tee "$OUT/$v.md"
 done
 info "done: $OUT/*.md"
