@@ -107,8 +107,9 @@ change `HF_REVISION`, then download, bench, install. Files of the same revision 
 Winner = highest `sqrt(pp32768 x tg512)`. It is written to the `.env` and committed. The report goes to
 `/srv/llm/results/<id>/<date>.md`. Use `PHASES=numa,spec` to skip the fit search.
 
-Note on this host: each EPYC 7601 has 4 dies, so Linux shows **8 NUMA nodes** (8 cores, ~64 GB each),
-not 2. A single node cannot hold the model, so the per-socket mode is `node0-3` / `node4-7`.
+Per-socket modes on this host are `node0-3` / `node4-7`. The bench picks `--n-cpu-moe` and the split only; the
+serving configs were tuned by hand past it. Host NUMA layout and all measured speed work, applied and rejected:
+[docs/token-speed.md](../docs/token-speed.md).
 
 ## Troubleshooting
 
