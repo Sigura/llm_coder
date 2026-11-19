@@ -46,7 +46,9 @@ def load_runner(path: Path):
 
 class Model:
     def __init__(self, url, model, key_file, sampling, max_tokens, seed):
-        self.url, self.model, self.sampling, self.max_tokens, self.seed = url, model, sampling, max_tokens, seed
+        # devbox provider URLs end in /v1, burnish's --url does not
+        self.url = url.rstrip("/").removesuffix("/v1")
+        self.model, self.sampling, self.max_tokens, self.seed = model, sampling, max_tokens, seed
         self.key = Path(key_file).read_text().strip() if key_file else None
 
     def chat(self, messages, max_tokens=None) -> tuple[str, bool, dict, float]:
