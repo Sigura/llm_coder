@@ -21,6 +21,12 @@ dependencies:
   - libxml2-devel
   - cuda-profiler-api
   - cuda-culibos-static
+  - cuda-nvrtc-dev
+  - libcurand-dev
+  - libcusparse-dev
+  - libcusolver-dev
+  - cuda-cccl
+  - aria2
   - pip
   - pip:
       - huggingface_hub[hf_xet]==2.3.0

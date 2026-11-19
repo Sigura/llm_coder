@@ -8,8 +8,10 @@
 set -euo pipefail
 
 LLM_ROOT=${LLM_ROOT:-/home/sigura/llm_coder/llm}
-HF=$LLM_ROOT/venv/bin/hf
-export HF_HOME=$LLM_ROOT/hf-cache
+# aria2c, not hf: over this link hf's xet client piled out-of-order chunks up in RAM and restarted whole files after
+# failed reconstructions (15 GB received, nothing kept, Nov 19), and without xet hf refuses files over 50 GB. The
+# resolve URLs redirect to a CDN that serves ranges, so aria2c resumes each file from its .aria2 control file.
+CONNS=${CONNS:-16}
 OUT=$LLM_ROOT/models
 RETRY_SEC=${RETRY_SEC:-60}
 
@@ -22,14 +24,14 @@ XQ_DIR=$OUT/deepseek-v4.1-flash-1017-xq/$XQ_REV
 
 log() { printf '%s %s\n' "$(date '+%F %T')" "$*"; }
 
-[[ -x $HF ]] || { log "missing $HF"; exit 1; }
+command -v aria2c >/dev/null || { log "missing aria2c (conda env)"; exit 1; }
 command -v jq >/dev/null || { log "missing jq"; exit 1; }
 avail_gb=$(df -BG --output=avail "$OUT" | tail -1 | tr -dc 0-9)
 ((avail_gb > 750)) || { log "only ${avail_gb} GB free under $OUT, need ~700"; exit 1; }
 
 evict_loop() { # <dir>
     while sleep 60; do
-        # hf renames .incomplete files when they finish, so a file listed here can be gone by the time dd opens it
+        # aria2 removes its .aria2 control files when a file finishes, so a listed file can be gone by the time dd opens it
         find "$1" -type f -print0 2>/dev/null | while IFS= read -r -d '' f; do
             dd if="$f" iflag=nocache count=0 status=none 2>/dev/null || true
         done
@@ -46,15 +48,20 @@ check_sizes() { # <repo> <rev> <dir> <include regex>
     return $bad
 }
 
-fetch() { # <repo> <rev> <dir> <include regex> [hf --include patterns...]
-    local repo=$1 rev=$2 dir=$3 re=$4 attempt=0
-    shift 4
-    local inc=()
-    for p in "$@"; do inc+=(--include "$p"); done
+fetch() { # <repo> <rev> <dir> <include regex>
+    local repo=$1 rev=$2 dir=$3 re=$4 attempt=0 list
     mkdir -p "$dir"
+    list=$dir/.aria2-input
+    # one entry per file: URL, out=, and the LFS sha256 that aria2c checks when the file completes
+    curl -sSf "https://huggingface.co/api/models/$repo/revision/$rev?blobs=true" |
+        jq -r --arg re "$re" --arg base "https://huggingface.co/$repo/resolve/$rev/" '.siblings[]
+            | select(.rfilename | test($re))
+            | "\($base)\(.rfilename)\n  out=\(.rfilename)" + (if .lfs.sha256 then "\n  checksum=sha-256=\(.lfs.sha256)" else "" end)' >"$list"
     evict_loop "$dir" &
     local ev=$!
-    until "$HF" download "$repo" --revision "$rev" --local-dir "$dir" "${inc[@]}" --format quiet; do
+    until aria2c -i "$list" -d "$dir" -j 1 -x "$CONNS" -s "$CONNS" -k 64M -c --file-allocation=falloc --auto-file-renaming=false \
+        --allow-overwrite=false --max-tries=0 --retry-wait=30 --check-integrity=true --summary-interval=600 \
+        --console-log-level=warn; do
         attempt=$((attempt + 1))
         log "download of $repo failed (attempt $attempt), retrying in ${RETRY_SEC}s"
         sleep "$RETRY_SEC"
@@ -66,13 +73,12 @@ fetch() { # <repo> <rev> <dir> <include regex> [hf --include patterns...]
 }
 
 log "1/3 $FP8_REPO Engram shards -> $FP8_DIR"
-fetch "$FP8_REPO" "$FP8_REV" "$FP8_DIR" '^(model-0004[78]-of-00048[.]safetensors|model[.]safetensors[.]index[.]json|config[.]json)$' \
-    'model-00047-of-00048.safetensors' 'model-00048-of-00048.safetensors' 'model.safetensors.index.json' 'config.json'
+fetch "$FP8_REPO" "$FP8_REV" "$FP8_DIR" '^(model-0004[78]-of-00048[.]safetensors|model[.]safetensors[.]index[.]json|config[.]json)$'
 
 log "2/3 $FP8_REPO -> $FP8_DIR"
 fetch "$FP8_REPO" "$FP8_REV" "$FP8_DIR" '.*'
 
 log "3/3 $XQ_REPO (v4) -> $XQ_DIR"
-fetch "$XQ_REPO" "$XQ_REV" "$XQ_DIR" '^(v4/|tokenizer/|README)' 'v4/*' 'tokenizer/*' '*.txt' 'README.md'
+fetch "$XQ_REPO" "$XQ_REV" "$XQ_DIR" '^(v4/|tokenizer/|README)'
 
 log "all downloads done"
