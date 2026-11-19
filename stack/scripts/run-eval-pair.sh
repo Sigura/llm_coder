@@ -8,8 +8,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-NAV_ID=${NAV_ID:-deepseek}
-DRIVER_ID=${DRIVER_ID:-coder}
+NAV_ID=${NAV_ID:-deepseek-v4.1-flash}
+DRIVER_ID=${DRIVER_ID:-qwen3.8-27b}
 NAV_MODEL=${NAV_MODEL:-deepseek-v4.1-flash}
 DRIVER_MODEL=${DRIVER_MODEL:-qwen3.8-27b}
 SEEDS=${SEEDS:-1 2 3}
