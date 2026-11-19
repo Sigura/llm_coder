@@ -8,6 +8,8 @@ source "$(dirname "$0")/lib.sh"
 
 MODEL=deepseek-v4.1-flash-1017
 ALL_EXPERTS_CPU="per_layer_token_embd.weight=CPU,ffn_(up|gate|down)_exps=CPU"
+# the 2026-11-13 layout, before the model env switched to the MoE cache
+OLD_OT="per_layer_token_embd.weight=CPU,blk[.](18|19)[.]ffn_(up|gate|down)_exps=CUDA0,blk[.](38|39)[.]ffn_(up|gate|down)_exps=CUDA1,ffn_(up|gate|down)_exps=CPU"
 declare -A CONFIGS=(
     [base]="ot|"
     [cpu-23936-0.9]="cpu|--moe-cache-mib 23936 --moe-cache-cpu-share 0.9"
@@ -25,7 +27,7 @@ API_KEY=$(api_key)
 BASE=http://127.0.0.1:$BENCH_PORT
 OUT=$RESULTS_DIR/moe-cache-$(date +%F)/check
 mkdir -p "$OUT"
-ot_args=$EXTRA_ARGS
+ot_args=$(sed -E 's/ --moe-cache-(mib|cpu-share) [^ ]+//g' <<<"$EXTRA_ARGS")
 
 info "step 1: check GPUs 0,1 are free"
 while IFS=, read -r idx used; do
@@ -45,6 +47,13 @@ make_req "$STACK_DIR/scripts/lib.sh" \
     "Add a function lock_set to this library that writes or replaces a versions.lock row, in the same style. Show only the new code." "$OUT/req-1.json"
 make_req "$STACK_DIR/scripts/llm_panel.py" \
     "Write pytest tests for the serve-log parser in this file. Show only the test file." "$OUT/req-2.json"
+# REQS="3": one long request, all stack scripts as context (~35k tokens)
+for f in "$STACK_DIR"/scripts/*.sh "$STACK_DIR"/scripts/*.py; do
+    [[ $(basename "$f") == tmp_* ]] || printf '# file: %s\n%s\n\n' "$(basename "$f")" "$(cat "$f")"
+done >"$OUT/all-scripts.txt"
+make_req "$OUT/all-scripts.txt" \
+    "Find the three most likely bugs in these scripts. For each: file, line, why, and a fix." "$OUT/req-3.json"
+read -ra REQS <<<"${REQS:-1 2}"
 
 SRV_PID=""
 stop_server() {
@@ -64,11 +73,11 @@ for label in "${ORDER[@]}"; do
     layout=${CONFIGS[$label]%%|*}
     cache=${CONFIGS[$label]#*|}
     EXTRA_ARGS=$ot_args
-    if [[ $layout == cpu ]]; then
-        read -ra a <<<"$ot_args"
-        for ((i = 0; i < ${#a[@]}; i++)); do [[ ${a[i]} == -ot ]] && a[i + 1]=$ALL_EXPERTS_CPU; done
-        EXTRA_ARGS="${a[*]}"
-    fi
+    read -ra a <<<"$ot_args"
+    ot=$OLD_OT
+    [[ $layout == cpu ]] && ot=$ALL_EXPERTS_CPU
+    for ((i = 0; i < ${#a[@]}; i++)); do [[ ${a[i]} == -ot ]] && a[i + 1]=$ot; done
+    EXTRA_ARGS="${a[*]}"
     EXTRA_ARGS+=" $cache"
     SRV_PORT=$BENCH_PORT SRV_HOST=127.0.0.1 build_server_cmd
     log_file=$OUT/server-$label.log
@@ -80,13 +89,13 @@ for label in "${ORDER[@]}"; do
     tag=$label
     ((${PARALLEL:-0})) && tag=$label-par
     pids=()
-    for r in 1 2; do
+    for r in "${REQS[@]}"; do
         api POST "$BASE" /v1/chat/completions "$OUT/req-$r.json" >"$OUT/resp-$tag-$r.json" &
         pids+=($!)
         ((${PARALLEL:-0})) || wait "${pids[-1]}"
     done
     for p in "${pids[@]}"; do wait "$p"; done
-    for r in 1 2; do
+    for r in "${REQS[@]}"; do
         jq -r --arg l "$tag" --arg r "$r" '[$l, $r, .timings.prompt_n, (.timings.prompt_per_second*10|round/10),
             .timings.predicted_n, (.timings.predicted_per_second*100|round/100)] | @tsv' "$OUT/resp-$tag-$r.json" | tee -a "$RESULT"
     done
