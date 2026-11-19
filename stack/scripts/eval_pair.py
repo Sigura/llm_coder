@@ -14,10 +14,13 @@ import importlib.util
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+LOAD_RETRIES = 30
+LOAD_RETRY_SEC = 30
 NAV_SYSTEM = (
     "You are the navigator in a pair-programming session. Another model, the driver, writes the code; you plan, "
     "set the checks it must pass, and review. Be brief and concrete. Never write the whole file yourself."
@@ -60,9 +63,18 @@ class Model:
         if self.key:
             headers["Authorization"] = f"Bearer {self.key}"
         req = urllib.request.Request(f"{self.url}/v1/chat/completions", json.dumps(body).encode(), headers)
-        start = time.monotonic()
-        with urllib.request.urlopen(req, timeout=3600) as resp:
-            data = json.load(resp)
+        # router-mode servers load the model on the first request and drop connections or answer 5xx meanwhile
+        for attempt in range(1, LOAD_RETRIES + 1):
+            start = time.monotonic()
+            try:
+                with urllib.request.urlopen(req, timeout=3600) as resp:
+                    data = json.load(resp)
+                break
+            except (urllib.error.URLError, ConnectionError) as e:
+                if isinstance(e, urllib.error.HTTPError) and e.code < 500 or attempt == LOAD_RETRIES:
+                    raise
+                print(f"  {self.url}: {e}; retry {attempt}/{LOAD_RETRIES} in {LOAD_RETRY_SEC} s", flush=True)
+                time.sleep(LOAD_RETRY_SEC)
         choice = data["choices"][0]
         return ((choice["message"].get("content") or "").strip(), choice.get("finish_reason") == "length",
                 data.get("usage", {}), time.monotonic() - start)
