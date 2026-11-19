@@ -8,13 +8,13 @@ Models and their serving setup:
 
 | port | model | where | single-stream decode |
 |---|---|---|---|
-| 8080 | DeepSeek V4.1 Flash 1017, unsloth UD-Q2_K_XL | GPUs 0,1 + experts in host RAM, 2 slots × 128k | 16.3–17.4 tok/s |
+| 8080 | DeepSeek V4.1 Flash 1017, unsloth UD-Q2_K_XL | GPUs 0,1 + experts in host RAM, 2 slots × 128k | 14.5–14.8 tok/s (prefill 100–130) |
 | 8086 | Qwen3.8-27B dense, UD-Q6_K | GPU 2 | 35 tok/s |
 | 8085 | Qwen3.6-35B-A3B + MTP heads, UD-Q4_K_XL | GPU 3 | 205–219 tok/s |
 
 Unless noted, "tg" is decode speed and "pp" is prompt (prefill) speed, both in tok/s. Numbers measured on real coding
 prompts through the server are worth more than llama-bench numbers, because llama-bench feeds random tokens.
-Raw data lives in `LLM_ROOT/results/` (`tg-study-2026-11-13/`, `two-model-2026-11-13/report.md`, `moe-cache-2026-11-19/`).
+Raw data lives in `LLM_ROOT/results/` (`tg-study-2026-11-13/`, `two-model-2026-11-13/report.md`, `moe-cache-2026-11-19/`, `ubatch-2026-11-19/`).
 
 ## 1. Applied after measurement
 
@@ -31,7 +31,8 @@ Raw data lives in `LLM_ROOT/results/` (`tg-study-2026-11-13/`, `two-model-2026-1
 | `--poll 0` (no busy-wait between ops) | tg 12.9 → 13.5; less power per load step | model env |
 | All routed experts in RAM + llama.cpp's MoE expert cache, `--moe-cache-mib 23936 --moe-cache-cpu-share 0.95` | tg 12.9 → 16.7–17.4 (5–8k prompts), 12.85 → 16.88 (44.5k prompt); in production 16.3 over 1867 tokens; pp unchanged (−5% on the long prompt) | PR #4 |
 | `--parallel 2`, 128k context per slot | one session unchanged; two at once 7.1 each = +24% total throughput | PR #2 |
-| `-b 4096 -ub 2048` | set in the first bench round (Nov 11); no clean before/after pair was recorded | model env |
+| `-b 4096 -ub 2048` | set in the first bench round (Nov 11); no clean before/after pair was recorded | replaced by `-ub 4096` |
+| `-ub 4096` with the MoE cache cut to 17920 MiB | pp 69.2 → 99.8 (8k prompt), 78.6 → 122.1 (44.5k); tg 16.3 → 14.5–14.8. A 14.5k-token OpenCode turn with 1k output: ~257 s → ~195 s | model env |
 
 Why these work: DeepSeek decode is bound by host memory bandwidth. The CPU expert matmuls read weights straight from
 the mmapped page cache, and a page lives on the NUMA node that first read it. A fine 8-node interleave uses all
@@ -59,6 +60,11 @@ misses (95%) are computed on the CPU instead.
 | smaller context (8k vs 131k) | no tg change | KV is tiny (~1.7 GB for 2×128k); nothing to gain by moving context either |
 | two DeepSeek servers instead of 2 slots | +8% total over 2 slots | costs GPUs 2,3 and twice the VRAM; decode bandwidth is shared anyway |
 | one CPU socket per server (`numactl --cpunodebind`) | single stream 11.5 → 9.7–10.9 | halves the memory channels per stream |
+| `-ub 3072` (cache 17920) | pp 65.6 / 75.6, tg 13.8 / 14.6 | under `-b 4096` each batch still splits into two ubatches, so the expert uploads per prompt do not drop |
+| `-ub 4096` with cache 12800 instead of 17920 | pp 109.6 / 129.7, tg 14.5 / 14.0 vs 99.8 / 122.1, 14.5 / 14.8 | within noise; the larger cache is kept |
+| `-b 6144 -ub 6144` (cache 6144) | pp 110.7 / 160.3, tg 11.9 / 11.9 | faster only on very long prompts; the same ~195 s on a 14.5k turn and slower on every decode-heavy turn |
+| `-b 8192 -ub 8192` | does not start | 20.5 GiB compute buffer on CUDA1 (CUDA1 holds the output layer, its buffer grows faster than CUDA0's: 10.2 vs 6.5 GiB at 4096) |
+| `kernel.numa_balancing=0` (host sysctl, Nov 19) | pp 78.6 vs 74.0, tg 16.3 vs 16.9 on the 44.5k prompt (downloads running) | no measurable effect; kept off as llama.cpp recommends (`/etc/sysctl.d/90-numa-balancing.conf`) |
 | MoE cache CPU share 0.9 / 0.98 / 1 | 15.5 / 16.0–17.1 / 12.7 vs 16.7–17.4 at 0.95 | 1 = all misses uploaded at ~4 GiB/s; lower shares push too much to the CPU |
 | old `-ot` layout + MoE cache in the leftover ~3.5 GiB VRAM | peaks at 13.0–13.2 | cache too small; all experts in RAM frees the VRAM for a 23.9 GiB cache |
 | `moe-cache-tune.py` predictions (19–20 tok/s at share 0.98) | not reproduced | its time model fitted a negative constant on this host; measured directly instead |
@@ -75,15 +81,16 @@ misses (95%) are computed on the CPU instead.
 | DeepSeek fully on GPUs | GPU-speed decode and prefill | 185.9 GiB without Engram vs 4×24 GB of VRAM |
 | MTP with `--parallel > 1` on Qwen3.6 | two sessions on the small model | not supported with MTP yet; we run 1 slot |
 | Full GPU power (4090 450 W, 3090 Ti 480 W) | DeepSeek tg 11.5 → 12.8 (Nov 15 vs Nov 16 numbers); faster prefill on GPU 1 (power-capped at 600–900 MHz) | caps (4090 193–232 W, 3090 Ti 201 W) set after two abrupt host resets on Nov 15; cause not found |
-| SGLang + KTransformers for DeepSeek | prefill ~1700 tok/s claimed (we get 62–78 on real prompts) | needs two 4090s, and GPUs 2,3 run the Qwen models; not tried, claim not verified here |
-| Xolotl / Strata fork on GPU 3 | faster prefill/decode (claimed) | GPU 3 serves the Qwen3.6 MTP small_model; not tried |
+| SGLang + KTransformers for DeepSeek | prefill ~1700 tok/s, decode 37–50 claimed by [donbcd/deepseek-v4.1-flash-1017-ktransformers](https://github.com/donbcd/deepseek-v4.1-flash-1017-ktransformers) on 2× EPYC 7452 + 2 GPUs | in progress: needs the 510 GB FP8 checkpoint (downloading at ~4 MB/s), ~420 GiB RAM (DeepSeek on 8080 must be stopped), GPUs 2,3, host `shmem_enabled=advise` (set Nov 19). Not verified here |
+| Xolotl / Strata fork on GPU 3 | prefill 200–400, decode 26–33 claimed on one 4090 with its own XQ quant; 15.8 tg with our unsloth UD-Q2_K_XL | in progress: runs our GGUF, but reads the Engram tables from the FP8 checkpoint's shards 47–48 (203 GB, downloading first). GPU 3 serves the Qwen3.6 MTP small_model during the test |
 | Builds on the host | — | host has CUDA 11.8 and a too-new gcc; everything builds in the container |
 
 ## 4. Other findings
 
 - **Prefill is the bottleneck for agent sessions, not decode.** Prefill copies the CPU experts to the GPU once per
-  2048-token ubatch from the main thread (op-offload). An OpenCode "ping" is ~14.5k prompt tokens. Real prompts get
-  62–78 tok/s (llama-bench 131–146). The MoE cache does not change prefill.
+  ubatch from the main thread (op-offload). An OpenCode "ping" is ~14.5k prompt tokens. Real prompts got 62–78 tok/s
+  at `-ub 2048` (llama-bench 131–146), 100–130 at `-ub 4096`. The MoE cache does not change prefill; the ubatch size
+  is capped by the compute buffer on CUDA1.
 - **Page-cache eviction by other work is the biggest slowdown.** With RAM full of other files' page cache
   (~200 GiB outside `/home/sigura`), the experts were evicted even right after warm-up (61.9% cached 3 s later). One
   OpenCode ping then took 41 min (prefill 5.99 tok/s). Big file jobs (quantize, KLD sweeps) did the same: tg 5.8,
@@ -97,8 +104,8 @@ misses (95%) are computed on the CPU instead.
   `stack/README.md`, "Troubleshooting"). So there is no host-RAM prompt cache across requests.
 - Loading DeepSeek takes ~5 min plus warm-up, so all models unload only after 10 h idle (the global default is 10 min).
 - The replaced GPU 1 (3090 Ti) costs DeepSeek nothing in decode; prefill is within ~3% of two 4090s.
-- The DeepSeek log at the 2026-11-19 restart warns that `/proc/sys/kernel/numa_balancing` is enabled again (it was
-  set to 0 on Nov 16; a host reboot probably reset it). Its effect on speed has not been measured.
+- `numa_balancing` came back on after a host reboot (set to 0 on Nov 16 by hand). Since Nov 19 it is 0 in
+  `/etc/sysctl.d/90-numa-balancing.conf`; turning it off measured no difference (section 2).
 - Host stability limits load tests: four hard hangs on Nov 13 came 10–15 s after llama.cpp started computing with
   64–96 busy-polling threads, and two resets on Nov 15. Best guess is a power-delivery transient, unconfirmed.
   `--poll 0` and 48 threads lower the load step. Keep `telemetry.sh` running during heavy runs.
