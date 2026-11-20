@@ -184,10 +184,22 @@ def main():
     nav = Model(args.nav_url, args.nav_model, args.nav_key_file, sampling(args, "nav"), args.nav_max_tokens, args.seed)
     drv = Model(args.driver_url, args.driver_model, args.driver_key_file, sampling(args, "driver"), args.max_tokens,
                 args.seed)
-    results = []
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # after each task, so a host hang loses one task, not the seed; a rerun with the same label resumes from it
+    partial = out_dir / f"{args.label}.partial.json"
+    results = json.loads(partial.read_text())["results"] if partial.exists() else []
+    done = {r["id"] for r in results}
+    if done:
+        print(f"resuming {partial}: {len(done)} tasks done", flush=True)
     for task in tasks:
+        if task["id"] in done:
+            continue
         r = solve(task, nav, drv, rce, args)
         results.append(r)
+        tmp = partial.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"results": results}, indent=1))
+        os.replace(tmp, partial)
         marks = "".join("+" if a["passed"] else "-" for a in r["attempts"])
         print(f"{task['id']:<28} {marks:<3} {sum(a['seconds'] for a in r['attempts']):7.1f} s", flush=True)
     summary = rce.summarize(results, args.attempts)
@@ -195,10 +207,10 @@ def main():
         rs = [r for r in results if lang in ("all", r["lang"])]
         s["navigator_tokens"] = sum(a["navigator_tokens"] for r in rs for a in r["attempts"])
         s["driver_tokens"] = sum(a["driver_tokens"] for r in rs for a in r["attempts"])
-    out = Path(args.out_dir) / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}.json"
     out.write_text(json.dumps({"args": {k: v for k, v in vars(args).items() if not k.endswith("key_file")},
                                "summary": summary, "results": results}, indent=1))
+    partial.unlink()
     rce.print_summary(summary, out)
 
 
