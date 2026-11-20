@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # One-off: DeepSeek V4.1-1017 FP8 on SGLang + KTransformers (llm/engines/alt/kt-wrapper) with the coding requests of
 # the 2026-11-19 MoE cache check (req-2: 8k tokens, req-3: 35k tokens), for a speed comparison with llama.cpp.
-# Needs ~420 GiB of RAM: stop deepseek/qwen/evalpair first. Two 4090s (KT's attention needs SM89; the 3090 Ti does
-# not run), picked by free memory unless GPUS is set. KEEP=1 leaves the server running on PORT.
+# Needs ~420 GiB of RAM: stop deepseek/qwen/evalpair first. One or two 4090s (KT's attention needs SM89; the 3090 Ti does
+# not run) with 16 GB free each (TP 1 or 2), picked by free memory unless GPUS is set. KEEP=1 leaves the server running on PORT.
 # A rerun skips the requests already in results.tsv.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -18,11 +18,13 @@ REQS=(${REQS:-2 3})
 NAME=deepseek-v4.1-flash-kt
 OUT=$(realpath -m "${OUT:-$RESULTS_DIR/kt-$(date +%F)}")
 BASE=http://127.0.0.1:$PORT
+KT_CUDA_HOME=${KT_CUDA_HOME:-${CONDA_PREFIX:-}}
 
 info "step 1: check prerequisites"
 require_cmd curl jq nvidia-smi python3
 [[ -x $KT/.venv/bin/python && -f $KT/engram-adapter/librow_store.so ]] || die "run $KT/setup.sh first"
 [[ -f $FP8/config.json ]] || die "no $FP8"
+[[ -e $KT_CUDA_HOME/targets/x86_64-linux/lib/libcudart.so ]] || die "no CUDA runtime under KT_CUDA_HOME=$KT_CUDA_HOME"
 part=$(find "$FP8" -maxdepth 1 -name '*.aria2' | wc -l)
 have=$(find "$FP8" -maxdepth 1 -name 'model-*.safetensors' | wc -l)
 ((part == 0 && have == 48)) || die "FP8 download incomplete: $have/48 shards, $part partial"
@@ -31,11 +33,12 @@ avail=$(awk '/MemAvailable/ {print int($2 / 1048576)}' /proc/meminfo)
 ((avail >= 430)) || die "only $avail GiB RAM available, KT needs ~420: stop the other model servers"
 if [[ -z $GPUS ]]; then
     GPUS=$(nvidia-smi --query-gpu=index,memory.free,name --format=csv,noheader,nounits |
-        awk -F', ' '$3 ~ /4090/ {print $2, $1}' | sort -rn | head -2 | cut -d' ' -f2 | sort -n | paste -sd,)
+        awk -F', ' '$3 ~ /4090/ && $2 > 16000 {print $2, $1}' | sort -rn | head -2 | cut -d' ' -f2 | sort -n | paste -sd,)
 fi
+[[ -n $GPUS ]] || die "no 4090 with 16 GB free"
 for g in ${GPUS//,/ }; do
     free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i "$g")
-    ((free > 20000)) || die "GPU $g has only $free MiB free"
+    ((free > 16000)) || die "GPU $g has only $free MiB free"
 done
 info "using GPUs $GPUS, $avail GiB RAM available"
 mkdir -p "$OUT"
@@ -62,14 +65,16 @@ done
 
 log_file=$OUT/server.log
 info "step 2: start KT on GPUs $GPUS, port $PORT, context $CTX (log $log_file; the first launch calibrates the prefill chunk)"
-(cd "$KT" && MODEL=$FP8 CUDA_VISIBLE_DEVICES=$GPUS SGLANG_PORT=$PORT SGLANG_SERVED_NAME=$NAME \
+# the container's CUDA toolkit is the conda env (no /usr/local/cuda): engram-adapter loads libcudart from CUDA_HOME
+(cd "$KT" && MODEL=$FP8 CUDA_HOME=$KT_CUDA_HOME CUDA_VISIBLE_DEVICES=$GPUS SGLANG_PORT=$PORT SGLANG_SERVED_NAME=$NAME \
     SGLANG_CONTEXT_LENGTH=$CTX exec setsid ./serve.sh --foreground) >"$log_file" 2>&1 &
 SRV_PID=$!
 
 info "step 3: wait for the model to load"
 for _ in $(seq 1800); do
     kill -0 "$SRV_PID" 2>/dev/null || die "server exited, see $log_file"
-    curl -sf -m 5 "$BASE/v1/models" | jq -e --arg n "$NAME" '.data[] | select(.id == $n)' >/dev/null 2>&1 && break
+    # the calibration launch serves on the same port; serve.sh prints "Run directory:" only for the real one
+    grep -q '^Run directory: ' "$log_file" && curl -sf -m 5 "$BASE/v1/models" | jq -e --arg n "$NAME" '.data[] | select(.id == $n)' >/dev/null 2>&1 && break
     sleep 4
 done
 curl -sf -m 5 "$BASE/v1/models" >/dev/null || die "server not up after 2 h, see $log_file"

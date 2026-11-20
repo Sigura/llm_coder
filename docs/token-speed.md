@@ -15,7 +15,7 @@ Models and their serving setup:
 Unless noted, "tg" is decode speed and "pp" is prompt (prefill) speed, both in tok/s. Numbers measured on real coding
 prompts through the server are worth more than llama-bench numbers, because llama-bench feeds random tokens.
 Raw data lives in `LLM_ROOT/results/` (`tg-study-2026-11-13/`, `two-model-2026-11-13/report.md`, `moe-cache-2026-11-19/`, `ubatch-2026-11-19/`,
-`remeasure-2026-11-20/`).
+`remeasure-2026-11-20/`, `kt-2026-11-20/`).
 
 ## 1. Applied after measurement
 
@@ -83,7 +83,7 @@ misses (95%) are computed on the CPU instead.
 | DeepSeek fully on GPUs | GPU-speed decode and prefill | 185.9 GiB without Engram vs 4×24 GB of VRAM |
 | MTP with `--parallel > 1` on Qwen3.6 | two sessions on the small model | not supported with MTP yet; we run 1 slot |
 | Full GPU power (4090 450 W, 3090 Ti 480 W) | DeepSeek tg 11.5 → 12.8 (Nov 15 vs Nov 16 numbers); faster prefill on GPU 1 (power-capped at 600–900 MHz) | caps (4090 193–232 W, 3090 Ti 201 W) set after two abrupt host resets on Nov 15; cause not found |
-| SGLang + KTransformers for DeepSeek | prefill ~1700 tok/s, decode 37–50 claimed by [donbcd/deepseek-v4.1-flash-1017-ktransformers](https://github.com/donbcd/deepseek-v4.1-flash-1017-ktransformers) on 2× EPYC 7452 + 2 GPUs | in progress: needs the 510 GB FP8 checkpoint (downloading at ~4 MB/s), ~420 GiB RAM (DeepSeek on 8080 must be stopped), GPUs 2,3, host `shmem_enabled=advise` (set Nov 19). Not verified here |
+| SGLang + KTransformers for DeepSeek (FP8 checkpoint, experts MXFP4 on the CPU, 2× 4090, Nov 20) | measured: pp 395.7 / 745.8 (327.5 as the first request after a launch), tg 10.4 / 10.7–11.1 vs llama.cpp 99.9 / 126.2, 14.1 / 14.5 (8k / 44.5k prompts): prefill 4–6× faster, decode ~25% slower ([the wrapper](https://github.com/donbcd/deepseek-v4.1-flash-1017-ktransformers) claims pp ~1700, tg 37–50 on 2× EPYC 7452); estimated from these speeds, a 14.5k-token OpenCode turn with 1k output takes ~115–135 s vs ~195–205 s | not switched yet: it takes the whole host (~400 GiB RAM, two 4090s, the 3090 Ti does not run it), so it replaces llama.cpp DeepSeek instead of running next to it; one request at a time by default; the first request after a launch pays one-off costs (Triton compiles: 10 min on the very first launch) |
 | Builds on the host | — | host has CUDA 11.8 and a too-new gcc; everything builds in the container |
 
 ## 4. Other findings
