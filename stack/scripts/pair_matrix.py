@@ -127,8 +127,14 @@ def seed_desc(seed, run):
     return seed if complete(run) or "part" in seed else f"{seed} (partial, {len(run['results'])}/29)"
 
 
+def display_name(key, col, name):
+    label = name if key in SOLO_SEEDS or (isinstance(key, tuple) and not SHORT.get(key[:2])) else col
+    return label + (" (llama.cpp)" if col == "PAIR" else "")
+
+
 def what_was_tested(all_setups):
-    rows = [(name, w, nv, ", ".join(seed_desc(s, r) for s, r in seeds.items())) for _, _, (w, nv), name, seeds in all_setups]
+    rows = [(display_name(key, col, name), w, nv, ", ".join(seed_desc(s, r) for s, r in seeds.items()))
+            for key, col, (w, nv), name, seeds in all_setups]
     return table(["setup", "writer (driver)", "planner / reviewer (navigator)", "seeds"], rows)
 
 
@@ -151,9 +157,7 @@ def headline(all_setups):
         t = "—" if not secs else (f"{secs[0]:,.0f} s" if len(secs) == 1 else f"{min(secs):,.0f}–{max(secs):,.0f} s")
         if key in NOTES or (isinstance(key, tuple) and key[:2] in NOTES):
             t += f" ({NOTES.get(key) or NOTES[key[:2]]})"
-        label = name if key in SOLO_SEEDS or (isinstance(key, tuple) and not SHORT.get(key[:2])) else col
-        label += " (llama.cpp)" if col == "PAIR" else ""
-        rows.append((mean(p2) if p2 else -1, (label, ", ".join(parts),
+        rows.append((mean(p2) if p2 else -1, (display_name(key, col, name), ", ".join(parts),
                      f"{mean(p2):.1f}" if len(p2) > 1 else "—", f"{mean(p1):.1f}" if len(p1) > 1 else (p1[0] if p1 else "—"), t)))
     rows.sort(key=lambda r: -r[0])
     return table(["setup", "pass@2 per seed", "mean", "pass@1 mean", "time per seed"], [r for _, r in rows])
