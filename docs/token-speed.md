@@ -112,7 +112,10 @@ misses (95%) are computed on the CPU instead.
   journal and the BMC log show nothing at the freeze (no MCE, no lockup; only correctable ECC on DIMMF1/DIMMH1 on
   Nov 15). Telemetry caught the Nov 20 08:49 one 14 s after an idle → 26% CPU load step (DeepSeek decode starting),
   temperatures and power normal. Since `processor.max_cstate=1` (Zen 1 C2 off, Nov 20) evalpair ran 5 h without a
-  hang. Keep `telemetry.sh` running during heavy runs.
+  hang. Keep `telemetry.sh` running during heavy runs. Nov 21: hangs at 12:36 and 16:08 (the second with GPU 1 idle).
+  Nov 22 01:12:34, after 7h45m of KT + both Qwens + two eval streams: another container's job had been running on
+  GPU 1 since 01:06 (100% from 01:11:26, total GPU power 470–590 W); the user put it down to the power surge
+  protection tripping.
 - The Nov 20 power changes (C2 off, GPU undervolting changed) cost llama.cpp DeepSeek 6–21%: no cache pp 66.6 / 71.4,
   tg 11.9 / 12.0 (Nov 19: 76.9 / 78.3, 12.9 / 12.9); cache 23936 at `-ub 2048` pp 60.6 / 71.1, tg 14.2 / 15.2 (76.7 /
   78.6, 17.4 / 16.3); 8k / 44.5k prompts. The two changes were not separated.
