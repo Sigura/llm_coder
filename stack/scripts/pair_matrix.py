@@ -210,6 +210,24 @@ def per_task(all_setups):
     return table(header, rows)
 
 
+def tests_first(all_setups):
+    rows = []
+    for _, _, _, name, seeds in all_setups:
+        for seed, run in seeds.items():
+            rs = [r for r in run["results"] if "nav_tests_on_ref" in r]
+            if not rs:
+                continue
+            checks = [a["nav_checks"] for r in rs for a in r["attempts"] if a.get("nav_checks")]
+            valid = [r for r in rs if r["nav_tests_on_ref"]]
+            rows.append((name, seed_desc(seed, run), len(rs), f"{len(valid)}/{len(rs)}",
+                         f"{sum(c[0] for c in checks)}/{len(checks)}", f"{sum(c[-1] for c in checks)}/{len(checks)}",
+                         f"{sum(len(c) - 1 for c in checks)}", f"{sum(solved(r, 2) for r in valid)}/{len(valid)}",
+                         f"{sum(solved(r, 2) for r in rs if not r['nav_tests_on_ref'])}/{len(rs) - len(valid)}"))
+    return table(["setup", "seed", "tasks", "nav tests pass on ref", "nav tests pass first try",
+                  "nav tests pass after fixes", "tdd fix turns", "pass@2 (nav tests valid)",
+                  "pass@2 (nav tests wrong)"], rows)
+
+
 def combinations(all_setups):
     running = running_labels()
     runs = {k: v for k, v in pair_runs().items() if not k[2]}
@@ -238,7 +256,7 @@ def replace_table(text, heading, new):
 def main():
     all_setups = setups()
     sections = [("## What was tested", what_was_tested(all_setups)), ("## Headline", headline(all_setups)),
-                ("## Summary per run", summary(all_setups)), ("## Per task", per_task(all_setups)),
+                ("## Summary per run", summary(all_setups)), ("## Per task", per_task(all_setups)), ("## Tests-first", tests_first(all_setups)),
                 ("## Combinations available", combinations(all_setups))]
     if "--write" in sys.argv:
         with open(REPORT) as f:
