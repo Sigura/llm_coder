@@ -13,7 +13,7 @@ OUT=/home/sigura/llm_coder/llm/results/pair-eval
 echo "== step 1: check prerequisites"
 for tool in python3 bash kotlinc curl; do command -v "$tool" >/dev/null || { echo "missing $tool" >&2; exit 1; }; done
 [[ -r $KEY ]] || { echo "no key file $KEY" >&2; exit 1; }
-curl -sf -m 5 -o /dev/null "${URL%/v1}/health" || { echo "no server on $URL" >&2; exit 1; }
+curl -sf -m 60 -o /dev/null "${URL%/v1}/health" || { echo "no server on $URL" >&2; exit 1; }
 
 for seed in $SEEDS; do
     label=pair-deepseek-nav-deepseek-kt-s$seed
