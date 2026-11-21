@@ -7,12 +7,18 @@ so pass@k / tests@k compare directly with plain run_coding_eval.py results. Per 
   3. navigator reviews the code in the same conversation; unless OK, the driver revises once
   4. the tests run; on failure the navigator turns the test output into a fix instruction for the next attempt
 The navigator keeps one conversation per task, so llama-server reuses its prompt prefix between turns.
+--tests-first: after the plan the navigator writes its own test file from the task text (burnish's harness format);
+the driver sees it, and before the real tests the driver's file runs against it, with up to --tdd-rounds fix turns.
+Whether the navigator's tests pass on the task's reference solution is recorded, never shown to the models.
 Keys: --nav-key-file / --driver-key-file (a path; the key is read from it, never printed).
 """
 import argparse
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -46,6 +52,25 @@ ANSWER_REVIEW = (
 FAIL_ASK = (
     "The tests failed on the driver's code:\n```\n{output}\n```\nTell the driver what to change, at most 10 lines, "
     "no code blocks."
+)
+TEST_FILE = {"python": "test.py", "bash": "test.sh", "kotlin": "Test.kt"}
+HARNESS = {
+    "python": "`test.py`: `def test_*():` functions with plain `assert`, importing what they test from `{module}`, "
+              "and ending with exactly these two lines:\nfrom _runner import main\nmain(globals())\n",
+    "bash": "`test.sh`: it starts with `source ./assert.sh`, runs the script as `bash {file} ...` in an empty "
+            "temporary directory (it may create files there), compares with `check NAME EXPECTED ACTUAL` (string "
+            "equality) and ends with `finish`.",
+    "kotlin": "`Test.kt`, compiled together with `{file}`: `fun main() {{ ... finish() }}` holding `check(\"name\") "
+              "{{ ... }}` blocks that use `eq(expected, actual)` and `throws<SomeException> {{ ... }}`.",
+}
+TESTS_ASK = (
+    "Now write the tests the driver's file must pass, as {harness} Cover your checks and the edge cases the task "
+    "states, 8-20 tests, every expected value derived from the task text alone. Reply with the complete "
+    "`{test_file}` in a single fenced code block."
+)
+TDD_FIX = (
+    "Your file fails the navigator's tests:\n```\n{output}\n```\nFix the code. If a failing test contradicts the task, "
+    "name it and say why in one line, and keep the behaviour the task requires. Reply with the complete `{file}`."
 )
 
 
@@ -93,6 +118,25 @@ def numbered(code: str) -> str:
     return "\n".join(f"{i:4} {line}" for i, line in enumerate(code.splitlines(), 1))
 
 
+def run_nav_tests(rce, task, code: str, tests: str) -> tuple[bool, str]:
+    """rce.run_tests with the navigator's test file in place of the task's own tests (fixtures are task inputs)."""
+    cmd, helper, _ = rce.RUNNERS[task["lang"]]
+    with tempfile.TemporaryDirectory(prefix=f"nav-{task['id']}-") as tmp:
+        work = Path(tmp)
+        shutil.copy(rce.ROOT / "lib" / helper, work / helper)
+        for f in task["dir"].iterdir():
+            # kotlin's test.sh is the same compile-and-run script in every task, not test content
+            if f.name.lower().startswith("fixture") or (task["lang"] == "kotlin" and f.name == "test.sh"):
+                shutil.copy(f, work / f.name)
+        (work / TEST_FILE[task["lang"]]).write_text(tests)
+        (work / task["file"]).write_text(code)
+        try:
+            proc = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=rce.TEST_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            return False, f"tests timed out after {rce.TEST_TIMEOUT} s"
+        return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
+
+
 def solve(task, nav: Model, drv: Model, rce, args) -> dict:
     task_text = f"{task['prompt'].strip()}\n\nWrite the file `{task['file']}`."
     ask = ARCHITECT_ASK if args.architect else PLAN_ASK
@@ -100,8 +144,22 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
     plan, _, usage, secs = nav.chat(nav_msgs, args.nav_max_tokens)
     nav_msgs.append({"role": "assistant", "content": plan})
     pending = {"seconds": secs, "nav_tokens": usage.get("completion_tokens") or 0}
-    drv_msgs = [{"role": "system", "content": rce.SYSTEM},
-                {"role": "user", "content": f"{task_text}\n\nThe navigator's plan:\n{plan}"}]
+    drv_task = f"{task_text}\n\nThe navigator's plan:\n{plan}"
+    tests = tests_on_ref = None
+    if args.tests_first:
+        harness = HARNESS[task["lang"]].format(file=task["file"], module=Path(task["file"]).stem)
+        nav_msgs.append({"role": "user", "content": TESTS_ASK.format(harness=harness,
+                                                                     test_file=TEST_FILE[task["lang"]])})
+        reply, _, usage, secs = nav.chat(nav_msgs, args.tests_max_tokens)
+        nav_msgs.append({"role": "assistant", "content": reply})
+        pending["seconds"] += secs
+        pending["nav_tokens"] += usage.get("completion_tokens") or 0
+        tests = rce.extract_code(reply)
+        if tests is not None:
+            drv_task += f"\n\nThe navigator's tests, `{TEST_FILE[task['lang']]}`; your file must pass them:\n```\n{tests}```"
+            ref = task["dir"] / f"ref{Path(task['file']).suffix}"
+            tests_on_ref = run_nav_tests(rce, task, ref.read_text(), tests)[0]
+    drv_msgs = [{"role": "system", "content": rce.SYSTEM}, {"role": "user", "content": drv_task}]
     attempts = []
     for _ in range(args.attempts):
         stats = {"seconds": pending["seconds"], "nav_tokens": pending["nav_tokens"], "drv_tokens": 0}
@@ -128,6 +186,21 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
                 revised = rce.extract_code(reply)
                 # without --keep-unrevised a revision without a code block fails the attempt (the original protocol)
                 code = revised if revised is not None or not args.keep_unrevised else code
+        nav_checks = []
+        if tests is not None and code is not None:
+            for r in range(args.tdd_rounds + 1):
+                ok, nav_out = run_nav_tests(rce, task, code, tests)
+                nav_checks.append(ok)
+                if ok or r == args.tdd_rounds:
+                    break
+                drv_msgs += [{"role": "assistant", "content": reply},
+                             {"role": "user", "content": TDD_FIX.format(output=nav_out[-rce.FEEDBACK_CHARS:],
+                                                                        file=task["file"])}]
+                reply, capped, usage, secs = drv.chat(drv_msgs)
+                stats["seconds"] += secs
+                stats["drv_tokens"] += usage.get("completion_tokens") or 0
+                fixed = rce.extract_code(reply)
+                code = fixed if fixed is not None else code
         if code is None:
             passed = False
             output = f"reply cut off at --max-tokens {args.max_tokens}" if capped else "no fenced code block in the reply"
@@ -137,7 +210,8 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
         attempts.append({"passed": passed, "capped": capped, "output": output, "seconds": round(stats["seconds"], 1),
                          "completion_tokens": stats["drv_tokens"] + stats["nav_tokens"],
                          "driver_tokens": stats["drv_tokens"], "navigator_tokens": stats["nav_tokens"],
-                         "reply": reply, "review": verdict, **({"plan": plan} if not attempts else {})})
+                         "reply": reply, "review": verdict, **({"plan": plan} if not attempts else {}),
+                         **({"nav_checks": nav_checks} if tests is not None else {})})
         if passed:
             break
         nav_msgs.append({"role": "user", "content": FAIL_ASK.format(output=output)})
@@ -147,7 +221,10 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
         drv_msgs += [{"role": "assistant", "content": reply},
                      {"role": "user", "content": f"The tests failed:\n```\n{output}\n```\nThe navigator says:\n{advice}\n"
                                                  f"Reply with the corrected complete `{task['file']}`."}]
-    return {"id": task["id"], "lang": task["lang"], "attempts": attempts}
+    out = {"id": task["id"], "lang": task["lang"], "attempts": attempts}
+    if args.tests_first:
+        out.update(nav_tests=tests, nav_tests_on_ref=tests_on_ref)
+    return out
 
 
 def sampling(args, prefix) -> dict:
@@ -194,6 +271,10 @@ def main():
     p.add_argument("--answer-review", action="store_true", help="driver answers each review line before the file")
     p.add_argument("--keep-unrevised", action="store_true",
                    help="keep the reviewed code when the driver's revision has no code block")
+    p.add_argument("--tests-first", action="store_true",
+                   help="navigator writes a test file after the plan; the driver's file must pass it first")
+    p.add_argument("--tdd-rounds", type=int, default=2, help="driver fix turns against the navigator's tests")
+    p.add_argument("--tests-max-tokens", type=int, default=6000, help="navigator tokens for the test file")
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/pair-eval"))
     args = p.parse_args()
 
