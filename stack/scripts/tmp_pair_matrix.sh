@@ -3,13 +3,13 @@
 # turn. Usage: tmp_pair_matrix.sh NAV:DRIVER [NAV:DRIVER ...]   with NAV/DRIVER in ds, q8, q6
 #   ds = DeepSeek V4.1 Flash on KTransformers :8080, q8 = Qwen3.8-27B :8086, q6 = Qwen3.6-35B-A3B MTP :8085
 # Each model gets the sampling of its solo eval runs in either role. Env: SEEDS (default 1 2 3), EXTRA (more
-# eval_pair.py args), TAG (label suffix for protocol variants). A finished seed is skipped, an interrupted one resumes.
+# eval_pair.py args), TAG (label suffix for protocol variants), Q8_URL (another Qwen3.8 server). A finished seed is skipped, an interrupted one resumes.
 set -euo pipefail
 cd "$(dirname "$0")"
 SEEDS=${SEEDS:-1 2 3}
 SECRETS=/home/sigura/llm_coder/llm/secrets
 OUT=/home/sigura/llm_coder/llm/results/pair-eval
-declare -A URL=([ds]=http://127.0.0.1:8080/v1 [q8]=http://127.0.0.1:8086/v1 [q6]=http://127.0.0.1:8085/v1)
+declare -A URL=([ds]=http://127.0.0.1:8080/v1 [q8]=${Q8_URL:-http://127.0.0.1:8086/v1} [q6]=http://127.0.0.1:8085/v1)
 declare -A MODEL=([ds]=deepseek-v4.1-flash [q8]=qwen3.8-27b [q6]=qwen3.6-35b-a3b-mtp)
 declare -A KEY=([ds]=$SECRETS/deepseek-v4.1-flash-1017.key [q8]=$SECRETS/qwen3.8-27b.key [q6]=$SECRETS/qwen3.6-35b-a3b-mtp.key)
 declare -A NAME=([ds]=deepseek-kt [q8]=qwen3.8 [q6]=qwen3.6mtp)
