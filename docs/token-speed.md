@@ -15,7 +15,7 @@ Models and their serving setup:
 Unless noted, "tg" is decode speed and "pp" is prompt (prefill) speed, both in tok/s. Numbers measured on real coding
 prompts through the server are worth more than llama-bench numbers, because llama-bench feeds random tokens.
 Raw data lives in `LLM_ROOT/results/` (`tg-study-2026-11-13/`, `two-model-2026-11-13/report.md`, `moe-cache-2026-11-19/`, `ubatch-2026-11-19/`,
-`remeasure-2026-11-20/`, `kt-2026-11-20/`).
+`remeasure-2026-11-20/`, `kt-2026-11-20/`, `kt-review-2026-11-21/`).
 
 ## 1. Applied after measurement
 
@@ -83,7 +83,7 @@ misses (95%) are computed on the CPU instead.
 | DeepSeek fully on GPUs | GPU-speed decode and prefill | 185.9 GiB without Engram vs 4×24 GB of VRAM |
 | MTP with `--parallel > 1` on Qwen3.6 | two sessions on the small model | not supported with MTP yet; we run 1 slot |
 | Full GPU power (4090 450 W, 3090 Ti 480 W) | DeepSeek tg 11.5 → 12.8 (Nov 15 vs Nov 16 numbers); faster prefill on GPU 1 (power-capped at 600–900 MHz) | caps (4090 193–232 W, 3090 Ti 201 W) set after two abrupt host resets on Nov 15; cause not found |
-| SGLang + KTransformers for DeepSeek (FP8 checkpoint, experts MXFP4 on the CPU, 2× 4090, Nov 20) | measured: pp 395.7 / 745.8 (327.5 as the first request after a launch), tg 10.4 / 10.7–11.1 vs llama.cpp 99.9 / 126.2, 14.1 / 14.5 (8k / 44.5k prompts): prefill 4–6× faster, decode ~25% slower ([the wrapper](https://github.com/donbcd/deepseek-v4.1-flash-1017-ktransformers) claims pp ~1700, tg 37–50 on 2× EPYC 7452); estimated from these speeds, a 14.5k-token OpenCode turn with 1k output takes ~115–135 s vs ~195–205 s | not switched yet: it takes the whole host (~400 GiB RAM, two 4090s, the 3090 Ti does not run it), so it replaces llama.cpp DeepSeek instead of running next to it; one request at a time by default; the first request after a launch pays one-off costs (Triton compiles: 10 min on the very first launch) |
+| SGLang + KTransformers for DeepSeek (FP8 checkpoint, experts MXFP4 on the CPU, Nov 20–21; `kt-2026-11-20/`, `kt-review-2026-11-21/`) | 8k / 44.5k prompts, tok/s: one 4090, 64 threads: pp 259 / 560, tg 13.8 / 13.8; two 4090s, 48 threads: pp 387 / 734, tg 13.1 / 13.0; two 4090s, 64 threads (its default): pp 396 / 746, tg 10.4 / 10.7; llama.cpp 99.9 / 126.2, 14.1 / 14.5. Evalpair seed 1 (navigator on KT, one 4090, 48 threads): pass@1 13, pass@2 20, tests@2 24.7 of 29 in 7819 s vs llama.cpp 14 / 21 / 25.1 in 7598 s. Tool calls 4 of 4 ([the wrapper's](https://github.com/donbcd/deepseek-v4.1-flash-1017-ktransformers) check; namespaced tools are its known gap). Evicting the checkpoint's page cache costs nothing (experts live in KT's own memory) | not switched yet, decision open: it takes ~400 GiB of RAM for good and replaces llama.cpp DeepSeek; it does not run on the 3090 Ti; on one 4090 a second running request runs out of VRAM on the 44.5k prompt, so one request at a time (a second waits); the prefix cache reuses whole prefill chunks only (36,864 tokens: a repeated 44.5k prompt prefills at 7151 tok/s, a repeated 8k one gets nothing); fewer threads help only with two GPUs (one GPU, 48 threads: tg 12.8–13.0); a launch takes ~25 min, the first request after it is slower, the very first launch compiles Triton kernels for 10 min; whether its per-node expert pools bind memory inside the container was not verified |
 | Builds on the host | — | host has CUDA 11.8 and a too-new gcc; everything builds in the container |
 
 ## 4. Other findings
