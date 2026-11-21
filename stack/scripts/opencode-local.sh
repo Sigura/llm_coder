@@ -4,6 +4,7 @@
 # model (build and plan), Qwen3.8-27B (8086) as the "fast" primary agent (Tab switches agents), Qwen3.6 MTP (8085) as
 # small_model and reviewer (llm-review.sh).
 # Also registers the router (llm-router.sh, 8090) as model "local-auto/auto"; --auto makes it the default model.
+# OPENCODE_MAIN=deepseek-v4.1-flash-1017-fp8 points the default model at the KTransformers server (same port and alias).
 # Config, sessions and logs live under $LLM_ROOT/state/opencode (the container's ~/.config is read-only).
 # API keys are exported from the key files without printing them.
 set -euo pipefail
@@ -13,7 +14,7 @@ load_global
 AUTO=0
 [[ ${1:-} == --auto ]] && { AUTO=1; shift; }
 
-MAIN=deepseek-v4.1-flash-1017 SMALL=qwen3.6-35b-a3b-mtp FAST=qwen3.8-27b
+MAIN=${OPENCODE_MAIN:-deepseek-v4.1-flash-1017} SMALL=qwen3.6-35b-a3b-mtp FAST=qwen3.8-27b
 base=$LLM_ROOT/state/opencode
 export XDG_CONFIG_HOME=$base/config XDG_DATA_HOME=$base/data XDG_STATE_HOME=$base/state XDG_CACHE_HOME=$base/cache
 mkdir -p "$XDG_CONFIG_HOME/opencode" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"

@@ -141,16 +141,22 @@ load_model() {
     [[ $id =~ ^[a-z0-9][a-z0-9._-]*$ ]] || die "invalid model id '$id'"
     MODEL_ENV=$STACK_DIR/config/models/$id.env
     [[ -f $MODEL_ENV ]] || die "no config for model '$id' (expected $MODEL_ENV). Known: $(model_ids | tr '\n' ' ')"
+    # optional keys a previously loaded model may have set
+    unset ENGINE KEY_ID
     source_env_file "$MODEL_ENV"
-    require_vars MODEL_ID HF_REPO HF_REVISION HF_INCLUDE MAIN_GGUF ALIAS PORT CTX N_CPU_MOE NUMA_MODE
+    if [[ ${ENGINE:-llama.cpp} == kt ]]; then
+        require_vars MODEL_ID HF_REPO HF_REVISION ALIAS PORT CTX KT_GPUS CUDA_HOME
+    else
+        require_vars MODEL_ID HF_REPO HF_REVISION HF_INCLUDE MAIN_GGUF ALIAS PORT CTX N_CPU_MOE NUMA_MODE
+    fi
     [[ ${MODEL_ID:-} == "$id" ]] || die "$MODEL_ENV: MODEL_ID=${MODEL_ID:-} does not match file name"
     [[ $HF_REVISION =~ ^[0-9a-f]{40}$ ]] || die "$MODEL_ENV: HF_REVISION must be a full 40-char commit sha (got '$HF_REVISION'); see 20-download-model.sh --latest"
     MODEL_DIR=$MODELS_DIR/$MODEL_ID
     MODEL_CURRENT=$MODEL_DIR/current
     MODEL_PREVIOUS=$MODEL_DIR/previous
     REV_DIR=$MODEL_DIR/$HF_REVISION
-    MODEL_PATH=$MODEL_CURRENT/$MAIN_GGUF
-    KEY_FILE=$SECRETS_DIR/$MODEL_ID.key
+    MODEL_PATH=$MODEL_CURRENT/${MAIN_GGUF:-}
+    KEY_FILE=$SECRETS_DIR/${KEY_ID:-$MODEL_ID}.key
     SERVICE=llm@$MODEL_ID.service
     # llama-server splits -c evenly over its --parallel slots; clients see one slot's share.
     local slots=1

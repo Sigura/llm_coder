@@ -107,7 +107,8 @@ else
     target=$HEALTH_LONG_CTX_TOKENS
     ((target + 4096 < SLOT_CTX)) || die "HEALTH_LONG_CTX_TOKENS=$target does not fit one slot ($SLOT_CTX of CTX=$CTX)"
     gen_filler 400 7 >"$WORK/sample.txt"
-    jq -Rs --arg m "$ALIAS" '{model: $m, content: .}' "$WORK/sample.txt" >"$WORK/tok.json"
+    # llama.cpp reads "content", SGLang (KTransformers) "prompt"
+    jq -Rs --arg m "$ALIAS" '{model: $m, content: ., prompt: .}' "$WORK/sample.txt" >"$WORK/tok.json"
     per100=$(api POST "$BASE" /tokenize "$WORK/tok.json" | jq '.tokens | length / 4')
     lines=$(awk -v t="$target" -v p="$per100" 'BEGIN { printf "%d", t / p * 100 * 0.97 }')
     code="NEEDLE-$(od -An -tu4 -N4 /dev/urandom | tr -d ' ')"
