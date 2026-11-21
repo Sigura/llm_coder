@@ -34,6 +34,15 @@ REVIEW_ASK = (
     "and nothing else: the single word OK, or one line per real defect in the form `line: problem -> fix`. "
     "Ignore style."
 )
+ARCHITECT_ASK = (
+    "Write the complete solution for the driver as precise prose and pseudocode: every function with its exact "
+    "behaviour, the data structures, each edge case and how it is handled, the exact output formats. The driver "
+    "only translates it into the file, so leave nothing to guess. No code blocks."
+)
+ANSWER_REVIEW = (
+    "First answer every line of the review: `line: fixed` or `line: rejected - <reason>`. Then reply with the "
+    "complete `{file}`, even if you rejected everything."
+)
 FAIL_ASK = (
     "The tests failed on the driver's code:\n```\n{output}\n```\nTell the driver what to change, at most 10 lines, "
     "no code blocks."
@@ -48,15 +57,15 @@ def load_runner(path: Path):
 
 
 class Model:
-    def __init__(self, url, model, key_file, sampling, max_tokens, seed):
+    def __init__(self, url, model, key_file, sampling, max_tokens, seed, think=False):
         # devbox provider URLs end in /v1, burnish's --url does not
         self.url = url.rstrip("/").removesuffix("/v1")
-        self.model, self.sampling, self.max_tokens, self.seed = model, sampling, max_tokens, seed
+        self.model, self.sampling, self.max_tokens, self.seed, self.think = model, sampling, max_tokens, seed, think
         self.key = Path(key_file).read_text().strip() if key_file else None
 
     def chat(self, messages, max_tokens=None) -> tuple[str, bool, dict, float]:
         body = {"messages": messages, "seed": self.seed, "max_tokens": max_tokens or self.max_tokens,
-                "chat_template_kwargs": {"enable_thinking": False}, **self.sampling}
+                "chat_template_kwargs": {"enable_thinking": self.think}, **self.sampling}
         if self.model:
             body["model"] = self.model
         headers = {"Content-Type": "application/json"}
@@ -86,7 +95,8 @@ def numbered(code: str) -> str:
 
 def solve(task, nav: Model, drv: Model, rce, args) -> dict:
     task_text = f"{task['prompt'].strip()}\n\nWrite the file `{task['file']}`."
-    nav_msgs = [{"role": "system", "content": NAV_SYSTEM}, {"role": "user", "content": f"{task_text}\n\n{PLAN_ASK}"}]
+    ask = ARCHITECT_ASK if args.architect else PLAN_ASK
+    nav_msgs = [{"role": "system", "content": NAV_SYSTEM}, {"role": "user", "content": f"{task_text}\n\n{ask}"}]
     plan, _, usage, secs = nav.chat(nav_msgs, args.nav_max_tokens)
     nav_msgs.append({"role": "assistant", "content": plan})
     pending = {"seconds": secs, "nav_tokens": usage.get("completion_tokens") or 0}
@@ -100,21 +110,24 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
         stats["drv_tokens"] += usage.get("completion_tokens") or 0
         code = rce.extract_code(reply)
         verdict = None
-        if code is not None:
+        if code is not None and args.review == "always":
             nav_msgs.append({"role": "user", "content": REVIEW_ASK.format(file=task["file"], code=numbered(code))})
             verdict, _, usage, secs = nav.chat(nav_msgs, args.nav_max_tokens)
             nav_msgs.append({"role": "assistant", "content": verdict})
             stats["seconds"] += secs
             stats["nav_tokens"] += usage.get("completion_tokens") or 0
             if verdict.rstrip(".").upper() != "OK":
+                ask = (ANSWER_REVIEW.format(file=task["file"]) if args.answer_review else
+                       f"Fix the real defects (ignore findings that are wrong) and reply with the corrected complete "
+                       f"`{task['file']}`.")
                 drv_msgs += [{"role": "assistant", "content": reply},
-                             {"role": "user", "content": f"The navigator reported:\n```\n{verdict}\n```\nFix the real "
-                                                         f"defects (ignore findings that are wrong) and reply with the "
-                                                         f"corrected complete `{task['file']}`."}]
+                             {"role": "user", "content": f"The navigator reported:\n```\n{verdict}\n```\n{ask}"}]
                 reply, capped, usage, secs = drv.chat(drv_msgs)
                 stats["seconds"] += secs
                 stats["drv_tokens"] += usage.get("completion_tokens") or 0
-                code = rce.extract_code(reply)
+                revised = rce.extract_code(reply)
+                # without --keep-unrevised a revision without a code block fails the attempt (the original protocol)
+                code = revised if revised is not None or not args.keep_unrevised else code
         if code is None:
             passed = False
             output = f"reply cut off at --max-tokens {args.max_tokens}" if capped else "no fenced code block in the reply"
@@ -173,6 +186,14 @@ def main():
     p.add_argument("--driver-top-k", type=int, default=20)
     p.add_argument("--driver-min-p", type=float, default=0.0)
     p.add_argument("--driver-presence-penalty", type=float, default=1.5)
+    # protocol variants, all off by default (the original protocol)
+    p.add_argument("--review", choices=("always", "on-fail"), default="always",
+                   help="on-fail: no navigator review before the first test run, only advice after a failure")
+    p.add_argument("--nav-think", action="store_true", help="navigator in thinking mode (raise --nav-max-tokens)")
+    p.add_argument("--architect", action="store_true", help="navigator writes the full solution in prose")
+    p.add_argument("--answer-review", action="store_true", help="driver answers each review line before the file")
+    p.add_argument("--keep-unrevised", action="store_true",
+                   help="keep the reviewed code when the driver's revision has no code block")
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/pair-eval"))
     args = p.parse_args()
 
@@ -181,7 +202,8 @@ def main():
     tasks = rce.load_tasks(root / "tasks", args.tasks, set(args.langs.split(",")))
     if not tasks:
         p.error("no tasks matched")
-    nav = Model(args.nav_url, args.nav_model, args.nav_key_file, sampling(args, "nav"), args.nav_max_tokens, args.seed)
+    nav = Model(args.nav_url, args.nav_model, args.nav_key_file, sampling(args, "nav"), args.nav_max_tokens, args.seed,
+                args.nav_think)
     drv = Model(args.driver_url, args.driver_model, args.driver_key_file, sampling(args, "driver"), args.max_tokens,
                 args.seed)
     out_dir = Path(args.out_dir)
