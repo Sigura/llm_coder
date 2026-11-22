@@ -131,7 +131,7 @@ def run_nav_tests(rce, task, code: str, tests: str) -> tuple[bool, str]:
         (work / TEST_FILE[task["lang"]]).write_text(tests)
         (work / task["file"]).write_text(code)
         try:
-            proc = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=rce.TEST_TIMEOUT)
+            proc = rce.run_test_cmd(cmd, work)
         except subprocess.TimeoutExpired:
             return False, f"tests timed out after {rce.TEST_TIMEOUT} s"
         return proc.returncode == 0, (proc.stdout + proc.stderr).strip()

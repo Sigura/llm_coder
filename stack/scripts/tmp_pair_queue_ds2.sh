@@ -10,8 +10,8 @@ OUT=/home/sigura/llm_coder/llm/results/pair-eval
 echo "== $(date +%T) step 1: seed 1 of q6:ds and q8:ds (resumes after the 2026-11-22 01:12 host hang)"
 SEEDS=1 ./tmp_pair_matrix.sh q6:ds q8:ds
 
-echo "== $(date +%T) step 2: OpenCode sh domain (build, review, fix)"
-python3 eval_opencode.py --tasks 'sh_*' --langs bash --label opencode-sh-ds-s1
+# Step 2, the OpenCode sh-domain eval, was stopped by the user on 2026-11-22 after 4 of 9 builds, none passing
+# (results in LLM_ROOT/results/opencode-eval/opencode-sh-ds-s1).
 echo "== $(date +%T) step 3: --tests-first ds:ds seed 1"
 EXTRA="--tests-first" TAG=tdd SEEDS=1 ./tmp_pair_matrix.sh ds:ds
 echo "== $(date +%T) step 4: seeds 2,3"
