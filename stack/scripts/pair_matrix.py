@@ -160,7 +160,7 @@ def headline(all_setups):
         if key in NOTES or (isinstance(key, tuple) and key[:2] in NOTES):
             t += f" ({NOTES.get(key) or NOTES[key[:2]]})"
         rows.append((mean(p2) if p2 else -1, (display_name(key, col, name), ", ".join(parts),
-                     f"{mean(p2):.1f}" if len(p2) > 1 else "—", f"{mean(p1):.1f}" if len(p1) > 1 else (p1[0] if p1 else "—"), t)))
+                     f"{mean(p2):.1f}" if len(p2) > 1 else "—", f"{mean(p1):.1f}" if len(p1) > 1 else "—", t)))
     rows.sort(key=lambda r: -r[0])
     return table(["setup", "pass@2 per seed", "mean", "pass@1 mean", "time per seed"], [r for _, r in rows])
 
