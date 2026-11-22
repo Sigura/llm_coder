@@ -5,7 +5,9 @@
 # Qwen3.6 MTP get no more seeds (user, 2026-11-21: no winners there).
 set -euo pipefail
 cd "$(dirname "$0")"
-OUT=/home/sigura/llm_coder/llm/results/pair-eval
+source ./lib.sh
+load_global
+OUT=$RESULTS_DIR/pair-eval
 
 echo "== $(date +%T) step 1: seed 1 of q6:ds and q8:ds (resumes after the 2026-11-22 01:12 host hang)"
 SEEDS=1 ./tmp_pair_matrix.sh q6:ds q8:ds

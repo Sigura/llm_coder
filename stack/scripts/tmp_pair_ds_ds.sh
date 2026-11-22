@@ -5,10 +5,12 @@
 # seed is skipped and an interrupted one resumes from eval_pair.py's partial file.
 set -euo pipefail
 cd "$(dirname "$0")"
+source ./lib.sh
+load_global
 SEEDS=${SEEDS:-1 2 3}
 URL=http://127.0.0.1:8080/v1
-KEY=/home/sigura/llm_coder/llm/secrets/deepseek-v4.1-flash-1017.key
-OUT=/home/sigura/llm_coder/llm/results/pair-eval
+KEY=$SECRETS_DIR/deepseek-v4.1-flash-1017.key
+OUT=$RESULTS_DIR/pair-eval
 
 echo "== step 1: check prerequisites"
 for tool in python3 bash kotlinc curl; do command -v "$tool" >/dev/null || { echo "missing $tool" >&2; exit 1; }; done

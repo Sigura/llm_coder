@@ -13,7 +13,9 @@ import sys
 from statistics import mean
 
 BURNISH = os.path.expanduser("~/burnish/eval/coding/results")
-PAIR = "/home/sigura/llm_coder/llm/results/pair-eval"
+GLOBAL_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "global.env")
+LLM_ROOT = next(line.split("=", 1)[1].strip().strip("'\"") for line in open(GLOBAL_ENV) if line.startswith("LLM_ROOT="))
+PAIR = os.path.join(LLM_ROOT, "results", "pair-eval")
 REPORT = os.path.join(PAIR, "pair-report.md")
 
 MODELS = {  # pair label name -> (matrix id, long name, short name)
