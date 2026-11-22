@@ -4,7 +4,10 @@
 # model (build and plan), Qwen3.8-27B (8086) as the "fast" primary agent (Tab switches agents), Qwen3.6 MTP (8085) as
 # small_model and reviewer (llm-review.sh).
 # Also registers the router (llm-router.sh, 8090) as model "local-auto/auto"; --auto makes it the default model.
-# Config, sessions and logs live under $LLM_ROOT/state/opencode (the container's ~/.config is read-only).
+# The default model is the KTransformers DeepSeek (deepseek-v4.1-flash-1017-fp8); OPENCODE_MAIN=deepseek-v4.1-flash-1017
+# points it at the llama.cpp config instead (same port, alias and key).
+# Config, sessions and logs live under $LLM_ROOT/state/opencode (the container's ~/.config is read-only);
+# OPENCODE_STATE=<dir> uses another dir. OPENCODE_REVIEW=0 leaves out the review-after-each-change instruction.
 # API keys are exported from the key files without printing them.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -13,8 +16,8 @@ load_global
 AUTO=0
 [[ ${1:-} == --auto ]] && { AUTO=1; shift; }
 
-MAIN=deepseek-v4.1-flash-1017 SMALL=qwen3.6-35b-a3b-mtp FAST=qwen3.8-27b
-base=$LLM_ROOT/state/opencode
+MAIN=${OPENCODE_MAIN:-deepseek-v4.1-flash-1017-fp8} SMALL=qwen3.6-35b-a3b-mtp FAST=qwen3.8-27b
+base=${OPENCODE_STATE:-$LLM_ROOT/state/opencode}
 export XDG_CONFIG_HOME=$base/config XDG_DATA_HOME=$base/data XDG_STATE_HOME=$base/state XDG_CACHE_HOME=$base/cache
 mkdir -p "$XDG_CONFIG_HOME/opencode" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
 cfg=$XDG_CONFIG_HOME/opencode/opencode.json
@@ -38,13 +41,13 @@ load_model $FAST
 fast="local-$MODEL_ID/$ALIAS"
 load_model $MAIN
 jq --arg m "local-$MODEL_ID/$ALIAS" --arg fast "$fast" --arg instr "$STACK_DIR/config/opencode-review.md" \
-    --arg plan "{file:$STACK_DIR/config/opencode-plan.md}" '
+    --arg plan "{file:$STACK_DIR/config/opencode-plan.md}" --arg review "${OPENCODE_REVIEW:-1}" '
     del(.agent.deep)
   | .agent.fast = {mode: "primary", model: $fast,
       description: "Qwen3.8-27B: ~3x faster than DeepSeek but weaker; quick edits and simple tasks (64k context)"}
   | .agent.plan = {model: $m, prompt: $plan, tools: {write: false, edit: false, patch: false},
       description: "DeepSeek plans and advises in short answers; build writes the code"}
-  | .instructions = ((.instructions // []) - [$instr] + [$instr])
+  | .instructions = ((.instructions // []) - [$instr] + (if $review == "0" then [] else [$instr] end))
   | .command.review = {description: "Independent review of the changes by Qwen3.6 MTP (llm-review.sh)",
       template: "Run ~/llm_coder/stack/scripts/llm-review.sh on the code changed in this session (--diff in a git repo, else the changed files) with a --task that states what the code must do. Show its output, then fix the defects you agree with. Focus: $ARGUMENTS"}' \
     "$cfg" >"$cfg.tmp"

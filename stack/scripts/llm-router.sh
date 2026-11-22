@@ -2,14 +2,14 @@
 # Usage: llm-router.sh [<model-id>:<max-prompt-tokens>... <last-model-id>]
 # Runs llm_router.py in the foreground on ROUTER_PORT (default 8090): one OpenAI-compatible model "auto" that sends
 # each chat request to the first model whose prompt limit fits, and keeps a conversation on the bigger model once it
-# has moved there. Default: qwen3.8-27b up to 48000 prompt tokens, then deepseek-v4.1-flash-1017.
+# has moved there. Default: qwen3.8-27b up to 48000 prompt tokens, then deepseek-v4.1-flash-1017-fp8 (KT).
 # Clients use the key in $LLM_ROOT/secrets/llm-router.key.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 require_cmd python3
 load_global
 
-(($#)) || set -- qwen3.8-27b:48000 deepseek-v4.1-flash-1017
+(($#)) || set -- qwen3.8-27b:48000 deepseek-v4.1-flash-1017-fp8
 port=${ROUTER_PORT:-8090}
 # Where the model servers are reached: 127.0.0.1 in the same container; the host gateway (llm-local) from a service.
 upstream=${ROUTER_UPSTREAM_HOST:-127.0.0.1}
