@@ -116,6 +116,11 @@ misses (95%) are computed on the CPU instead.
   Nov 22 01:12:34, after 7h45m of KT + both Qwens + two eval streams: another container's job had been running on
   GPU 1 since 01:06 (100% from 01:11:26, total GPU power 470–590 W); the user put it down to the power surge
   protection tripping, for this hang only; the earlier ones stay unexplained.
+- KT's GPU expert cache (hot lend) can stop silently. The server started at 01:32 on Nov 22 logged its last
+  "dynamic round" at 02:42 (GPU 39–41% of the routes); nothing in the log after it (no warning or error), and the
+  prefill plan's "loan" dropped to 0 MiB for good. 1-request decode fell from 18–20 to ~14.8 tok/s, 2 requests ran
+  16.0–16.4. A restart (12:57) brings the cache back. Suspects: the window lend not returned
+  (`kt_kv_hot_lend.tick`, `kt_kv_prefill_lend.decode_lend`); whether it stops again after idle gaps is being watched.
 - The Nov 20 power changes (C2 off, GPU undervolting changed) cost llama.cpp DeepSeek 6–21%: no cache pp 66.6 / 71.4,
   tg 11.9 / 12.0 (Nov 19: 76.9 / 78.3, 12.9 / 12.9); cache 23936 at `-ub 2048` pp 60.6 / 71.1, tg 14.2 / 15.2 (76.7 /
   78.6, 17.4 / 16.3); 8k / 44.5k prompts. The two changes were not separated.
