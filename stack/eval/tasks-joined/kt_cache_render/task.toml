@@ -1,0 +1,94 @@
+lang = "kotlin"
+file = "solution.kt"
+prompt = """
+In Kotlin (JVM, standard library only, no JSON libraries, top-level declarations in the default package), write one
+file `solution.kt` with four parts. The declarations of parts 1-3 are tested on their own too, so keep their
+exact names and signatures.
+
+## Part 1
+
+In Kotlin (JVM, standard library only, top-level declarations in the default package), implement
+
+```kotlin
+class LruCache<K, V>(val capacity: Int, private val onEvict: (K, V) -> Unit = { _, _ -> })
+```
+
+- `capacity` must be >= 1, else `IllegalArgumentException` from the constructor.
+- `operator fun get(key: K): V?` returns the value and marks the key most recently used; `null` if absent.
+- `operator fun set(key: K, value: V)` inserts or updates (an update also marks it most recently used). When an
+  insert makes the size exceed `capacity`, evict the least recently used entry and call `onEvict(key, value)` for it.
+  Updating an existing key never evicts.
+- `fun remove(key: K): V?` removes without calling `onEvict`.
+- `val size: Int`, `fun keys(): List<K>` from least to most recently used, `operator fun contains(key: K): Boolean`
+  which does NOT change recency.
+- `null` values are allowed when `V` is nullable; `get` returning `null` is then ambiguous, which is acceptable,
+  but `contains` must report `true` for a key stored with a null value.
+
+## Part 2
+
+In Kotlin (JVM, standard library only, top-level declarations in the default package), write a tokenizer for a small
+filter language like `status == "open" && (priority >= 2 || tag != 'x\\'y')`.
+
+```kotlin
+sealed class Token {
+    abstract val pos: Int  // 0-based index of the token's first character
+    data class Ident(val name: String, override val pos: Int) : Token()
+    data class Str(val value: String, override val pos: Int) : Token()
+    data class Num(val value: Double, override val pos: Int) : Token()
+    data class Op(val symbol: String, override val pos: Int) : Token()
+    data class Paren(val open: Boolean, override val pos: Int) : Token()
+}
+class TokenizeException(message: String, val pos: Int) : Exception(message)
+fun tokenize(input: String): List<Token>
+```
+Declare these exactly as shown.
+
+- Identifiers: `[A-Za-z_][A-Za-z0-9_.]*` (dots allowed after the first char, e.g. `user.name`).
+- Numbers: optional leading `-` only when the previous token is absent, an `Op`, or an opening paren; digits with an
+  optional fraction (`3`, `2.5`); `.5` and `5.` are errors. A `-` elsewhere is an error (there is no minus operator).
+- Strings: single or double quotes; backslash escapes the next character (`\\n` becomes a newline, any other escaped
+  character stands for itself). Unterminated strings are errors.
+- Operators: `== != <= >= < > && || !` (longest match first). Parentheses `(` `)`.
+- Whitespace (space, tab, newline) separates tokens and is skipped.
+- Anything else throws `TokenizeException` whose `pos` is the index of the offending character (for an
+  unterminated string, the index of its opening quote; for a malformed number such as `5.`, the index of its first
+  character).
+
+## Part 3
+
+In Kotlin (JVM, standard library only, no JSON libraries, top-level declarations in the default package), implement
+`fun toJson(value: Any?, indent: Int = 0): String` that serializes:
+
+- `null`, `Boolean`, `String`, `Int`, `Long`, `Double` (also `Float`), `Map<*, *>` with `String` keys, `List<*>` /
+  `Array<*>`, and Kotlin `enum` values (as their `name` string). Anything else, a non-String map key, or a
+  non-finite double (NaN, infinity) throws `IllegalArgumentException`.
+- Doubles: a whole number prints without a fraction only if it is an integer type; a `Double` like `2.0` prints `2.0`.
+  Use Kotlin's `toString()` for doubles (e.g. `1.0E-5` stays as Kotlin prints it).
+- Strings escape `"`, `\\\\`, and control characters below 0x20: `\\b \\f \\n \\r \\t` by name, others as `\\u00XX`
+  (lowercase hex). Non-ASCII characters are written as is.
+- `indent = 0`: compact output with no spaces at all (`{"a":1,"b":[1,2]}`).
+- `indent > 0`: pretty output; each nested element on its own line indented by `indent` spaces per level, a space
+  after `:`, empty maps/lists as `{}` / `[]`. Map entries keep their iteration order.
+
+## Part 4: `TokenJsonCache`
+
+```kotlin
+class TokenJsonCache(capacity: Int) {
+    val evicted: List<String>   // filters evicted from the cache, oldest eviction first
+    val misses: Int             // number of json() calls that were not served from the cache
+    fun json(filter: String, indent: Int = 0): String
+}
+```
+
+Built on the parts above:
+- It keeps an `LruCache` (part 1) of `capacity` entries keyed by the exact filter text; `capacity < 1` throws
+  `IllegalArgumentException`. When the cache evicts a filter, append it to `evicted`.
+- `json(filter, indent)` tokenizes `filter` (part 2) on a cache miss and stores the result; a hit uses the cache
+  (and marks the filter most recently used). It returns `toJson(result, indent)` (part 3), so one cached entry serves
+  every `indent`.
+- The result for a valid filter is a list with one map per token, keys in this order: `"type"` (`"ident"`, `"str"`,
+  `"num"`, `"op"` or `"paren"`), `"pos"` (Int), `"value"` (the name, the string value, the number as a Double, the
+  operator symbol, or `"("` / `")"` for parentheses).
+- If tokenizing throws `TokenizeException`, the result is the map `{"error": "tokenize", "pos": <its pos>}`; it is
+  cached like any other result.
+"""

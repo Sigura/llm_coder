@@ -1,0 +1,6 @@
+203.0.113.9 - - [14/Nov/2026:10:02:03 +0300] "GET /api/v1/items?id=3 HTTP/1.1" 200 5120 "-" "curl/8.5"
+198.51.100.2 - bob [14/Nov/2026:10:02:04 +0300] "POST /api/v1/items HTTP/1.1" 201 300 "https://x.test/a b" "Mozilla/5.0 (X11; Linux)"
+203.0.113.9 - - [14/Nov/2026:10:02:05 +0300] "GET /static/app.js HTTP/2.0" 304 - "-" "Mozilla/5.0"
+garbage line without format
+10.0.0.1 - - [14/Nov/2026:10:02:06 +0300] "GET /api/v1/items?id=4&x=1 HTTP/1.1" 200 1000 "-" "curl/8.5"
+10.0.0.1 - - [14/Nov/2026:10:02:07 +0300] "GET /health HTTP/1.1" 2OO 10 "-" "kube-probe"
