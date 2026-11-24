@@ -1,6 +1,6 @@
 # Pair programming eval: findings per run
 
-Copy of `LLM_ROOT/results/pair-eval/pair-findings.md` as of 2026-11-24 09:50; the live file there may be newer (tests-first
+Copy of `LLM_ROOT/results/pair-eval/pair-findings.md` as of 2026-11-24 15:10; the live file there may be newer (tests-first
 and remeasure runs still running). Here `pair-winners.md`, `pair-report.md`, `pair-findings.md` are
 [pair-eval-winners.md](pair-eval-winners.md), [pair-eval-report.md](pair-eval-report.md),
 [pair-eval-findings.md](pair-eval-findings.md).
@@ -264,3 +264,9 @@ Files: `pair-winners.md` (winners + headline, short), `pair-report.md` (setup, g
   (rQ8, rDS, DS+DS pair, Q8>DS pair) sit within 0.6 pass@2 of each other, all +2.0 to +2.6 over DeepSeek alone: any
   second look helps, who looks and in what form barely matters. Slot B moved on to tdd nav Qwen3.8 + driver DS s1 at
   08:38.
+- nav DeepSeek (KT) + driver DeepSeek (KT), tests first, seed 2: 26 of 29, pass@1 24, tests@2 28.0, in 28,028 s
+  (resumed from 9 tasks done; seed 1: 24 / 22). Mean of 2 seeds **25.0 pass@2**, **23.0 pass@1**: the highest pass@1 of
+  any setup (DS+DS pair 20.0, DS+rDS 21.0), but pass@2 below the plain pair (26.7) and both reviewer setups (27.0–27.3),
+  at about 2x their time per seed (28–34k s vs 13–20k s). The navigator's tests make the first attempt right more often
+  and leave less for the second. Kotlin 4/4, Python 14/16, bash 8/9. Failed `py_e_duration`, `py_semver_range` (57 min,
+  both attempts), `sh_rotate`; `py_semver_range` also failed seed 1. No "no fenced code block" fault. s3 started 14:14.
