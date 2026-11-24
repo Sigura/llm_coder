@@ -2,7 +2,7 @@
 
 Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short), [pair-eval-report.md](pair-eval-report.md) (setup, generated tables, literature, gaps), [pair-eval-findings.md](pair-eval-findings.md) (per-run findings).
 
-## Winners (hand-written, refreshed on each finished seed; state 2026-11-24 21:10)
+## Winners (hand-written, refreshed on each finished seed; state 2026-11-24 23:50)
 
 score = (0.3 pass@1 + 0.7 pass@2) / 29, 0–1, the sort key (ties by pass@2): pass@2 = solved within two attempts (the
 second sees the first one's test failures), pass@1 = solved on the first; pass@2 weighs more since it is what the
@@ -20,7 +20,7 @@ single-stream decode of the writer, tok/s. Init = server launch to ready, cold a
 | 3 | nav DS + driver DS | pair | DeepSeek KT | 0.85 | **26.7** (26, 29, 25) | 3 | 20.0 | 13,362–19,648 s | 6.2 | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM |
 | 4 | nav Qwen3.8 + driver DS | pair | DeepSeek KT | 0.85 | **26.7** (26, 28, 26) | 3 | 19.7 | 11,335–22,267 s | 6.3 | 18–20 | 8.3 min | + 1× 4090 |
 | 5 | nav DS + driver DS (keep-unrevised) | pair, keep the pre-review file | DeepSeek KT | 0.84 | **26.7** (27, 27, 26) | 3 | 19.3 | 14,162–25,062 s | 5.0 | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM |
-| 6 | nav DS + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.84 | **25.0** (24, 26) | 2 | **23.0** | 28,028–34,307 s | 2.9 | 18–20 | 8.3 min | 1× 4090 + RAM |
+| 6 | nav DS + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.83 | **25.0** (24, 26, 25) | 3 | **22.3** | 28,028–34,307 s | 2.8 | 18–20 | 8.3 min | 1× 4090 + RAM |
 | 7 | DeepSeek alone | solo | DeepSeek | 0.79 | **24.7** | 3 | 19.0 | 7,536–10,754 s | 9.7 | 14.1–14.5 (llama.cpp) | ~5 min + warm-up | 2 GPUs + RAM |
 | 8 | nav Qwen3.8 + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.78 | 24 | 1 | 19 | 37,269 s | 2.3 | 18–20 | 8.3 min | + 1× 4090 |
 | 9 | nav Qwen3.6 MTP + driver DS | pair | DeepSeek KT | 0.77 | 23.7 (26, 23, 22) | 3 | 18.7 | 9,774–15,162 s | 6.6 | 18–20 | 8.3 min | + 1× 4090 |
@@ -40,7 +40,7 @@ Practice effect per writer (pass@2; n > 1 marked):
 
 | writer \ practice | solo | + reviewer | nav DeepSeek | nav Qwen3.8 | nav Qwen3.6 MTP | tests first |
 |---|---|---|---|---|---|---|
-| DeepSeek | 24.7 (n 3) | rQ8 27.3 (n 3), rDS 27.0 (n 3) | 26.7 (n 3); keep 26.7 (n 3) | 26.7 (n 3) | 23.7 (n 3) | 25.0 (nav DS, n 2), 24 (nav Q8, s1) |
+| DeepSeek | 24.7 (n 3) | rQ8 27.3 (n 3), rDS 27.0 (n 3) | 26.7 (n 3); keep 26.7 (n 3) | 26.7 (n 3) | 23.7 (n 3) | 25.0 (nav DS, n 3), 24 (nav Q8, s1) |
 | Qwen3.8 | 16.7 (n 3) | rDS 22.0 (n 3), rQ6 17.7 (n 3) | 21.5 (KT, n 2), 21 (llama.cpp) | 19.0 (n 3) | 14.7 (n 3) | 22.3 (nav Q8, n 3), 20 (nav DS) |
 | Qwen3.6 MTP | 9.7 (n 3) | rDS 18 (s1; s2, s3 last), rQ8 15.7 (n 3) | 14 | 13 | 9 | — |
 
@@ -49,11 +49,11 @@ Readout:
   DS+DS pair and +2.6 over DeepSeek alone. DeepSeek + DeepSeek review 27.0 over 3 seeds (27, 28, 26;
   pass@1 21.0, the best n=3 pass@1). The four best DeepSeek setups (rQ8, rDS, DS+DS pair, Q8>DS pair) sit within 0.6:
   any second look adds 2–2.6 over DeepSeek alone; who looks and in what form is within a seed's noise.
-  Tests first (DS+DS, 25.0 over 2 seeds) gives the best pass@1 of all (23.0) but a lower pass@2 at 2x the time.
+  Tests first (DS+DS, 25.0 over 3 seeds: 24, 26, 25) gives the best pass@1 of all (22.3) but a lower pass@2 at 2x the time.
   With Qwen3.8 writing the tests (s1: 24, pass@1 19, score 0.78) it is worse than the plain Q8>DS pair (26.7 / 19.7)
   at 2–3x the time: only 6 of 29 Qwen3.8 test files pass the reference, and DeepSeek chases the wrong ones.
   By score the two DeepSeek reviewer setups lead (0.87 each; rDS ahead on pass@1), the DeepSeek pairs and tests first
-  follow at 0.84–0.85, DeepSeek alone 0.79.
+  follow at 0.83–0.85, DeepSeek alone 0.79.
 - Best quality (n 3): three DeepSeek-driven pairs, level: DeepSeek navigating DeepSeek 26.7 over 3 seeds (26, 29, 25, pass@1
   20 every seed), Qwen3.8 navigating DeepSeek 26.7 over 3 seeds (26, 28, 26, pass@1 19.7; 11–12k s per seed when KT
   is not shared three ways, the fastest DeepSeek pair), and keep-unrevised DS+DS 26.7 over 3 seeds (27, 27, 26, pass@1
@@ -61,10 +61,9 @@ Readout:
   All beat DeepSeek alone (24.7) by about 2; the gain is the review turn. Qwen3.6 navigating DeepSeek: 23.7 over 3
   seeds, no gain.
 - Order now (user, Nov 23 21:27: DeepSeek-written headline setups on the other practices to n=3 first; ETAs rough):
-  KT slot A: DeepSeek + Qwen3.8 review s1-s3 done 08:07; tdd DS+DS s2 done (26), s3 running since 14:14
-  (21 of 29 done, 19 solved; ~Nov 25 morning); slot B: DeepSeek + DeepSeek review s1-s3 done 08:34; tdd nav Qwen3.8 + driver DS s1 done 20:27 (24), s2 running
-  since 20:27 (4 of 29 done, 4 solved; s2, s3 ~Nov 25 evening). Remeasure in progress after that: nav DS + driver Qwen3.8 (KT) s3 (8 tasks done), tdd nav DS + driver
-  Qwen3.8 s2, s3. Qwen3.6 + Qwen3.8 review done (15.7, n 3, +6.0 over Qwen3.6 alone); Qwen3.6 + DeepSeek review s1: 18 (+8.3 over
+  KT slot A: DeepSeek + Qwen3.8 review s1-s3 done 08:07; tdd DS+DS s1-s3 done 23:43 (s3: 25),
+  now nav DS + driver Qwen3.8 (KT) s3 (resumed from 8 done); slot B: DeepSeek + DeepSeek review s1-s3 done 08:34; tdd nav Qwen3.8 + driver DS s1 done 20:27 (24), s2 running
+  since 20:27 (15 of 29 done, 15 solved; s2, s3 ~Nov 25 evening). Then on slot A: tdd nav DS + driver Qwen3.8 s2, s3. Qwen3.6 + Qwen3.8 review done (15.7, n 3, +6.0 over Qwen3.6 alone); Qwen3.6 + DeepSeek review s1: 18 (+8.3 over
   Qwen3.6 alone, above the Qwen3.8 reviewer), s2/s3 at the end. Not remeasured:
   Qwen3.6 MTP-written pairs (no potential, cut Nov 21) and nav DS on llama.cpp (engine retired; the KT run replaces it).
 - Best for Qwen3.8: tests first with a Qwen3.8 navigator (+5.6, 22.3 over 3 seeds
@@ -84,14 +83,14 @@ Readout:
 | nav DeepSeek (KT) + driver DeepSeek (KT) | 0.85 | 26, 29, 25 | 26.7 | 20.0 | 13,362–19,648 s |
 | nav Qwen3.8 + driver DeepSeek (KT) | 0.85 | 26, 28, 26 | 26.7 | 19.7 | 11,335–22,266 s |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.84 | 27, 27, 26 | 26.7 | 19.3 | 14,162–25,062 s |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.84 | 24, 26, seed 3: 19 of the first 21 | 25.0 | 23.0 | 28,028–34,307 s |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.83 | 24, 26, 25 | 25.0 | 22.3 | 28,028–34,307 s |
 | DeepSeek alone | 0.79 | 28 (pieced together), 23, 23 | 24.7 | 19.0 | 7,536–10,754 s |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.78 | 24, seed 2: 4 of the first 4 | 24 | 19 | 37,269 s |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.78 | 24, seed 2: 15 of the first 15 | 24 | 19 | 37,269 s |
 | nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.76 | 26, 23, 22 | 23.7 | 18.7 | 9,774–15,162 s |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.72 | 22, 20, 25 | 22.3 | 17.3 | 10,692–14,201 s |
 | Q8+rDS | 0.67 | 22, 22, 22 | 22.0 | 13.7 | 7,360–11,792 s |
 | DS>Q8 tdd | 0.66 | 20 | 20 | 17 | 16,813 s |
-| PAIR-KT | 0.66 | 20, 23, seed 3: 6 of the first 8 | 21.5 | 13.5 | 7,819–13,198 s |
+| PAIR-KT | 0.66 | 20, 23, seed 3: 6 of the first 9 | 21.5 | 13.5 | 7,819–13,198 s |
 | PAIR (llama.cpp) | 0.65 | 21, seed 2: 13 of the first 15 | 21 | 14 | 7,598 s |
 | nav Qwen3.8 + driver Qwen3.8 | 0.58 | 16, 22, 19 | 19.0 | 12.0 | 5,962–6,698 s |
 | Q6+rDS | 0.55 | 18 | 18 | 11 | 9,545 s |

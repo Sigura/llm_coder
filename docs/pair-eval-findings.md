@@ -275,3 +275,11 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   Python 13/16, bash 7/9. No attempt capped, no "no fenced code block" fault. Slow tasks: `py_grid_route` (one
   ~31k-token driver reply hit the 1 h timeout), `sh_env_export` 71 min. s2 started 20:27, the first seed with streamed
   requests (eval_pair.py 5592cc1).
+- nav DeepSeek (KT) + driver DeepSeek (KT), tests first, seed 3: 25 of 29, pass@1 21, tests@2 28.34, in 33,820 s
+  (seeds 1, 2: 24 / 22, 26 / 24). Mean of 3 seeds **25.0 pass@2**, **22.3 pass@1** (score 0.83): still the best pass@1
+  of any setup (DS+rDS 21.0, DS+DS pair 20.0), and still ~1.7 below the plain DS+DS pair and 2.0–2.3 below the
+  reviewer setups at pass@2, at about 2x their time (28–34k s vs 13–20k s). Kotlin 4/4, Python 14/16, bash 7/9.
+  Failed `py_ini_interp`, `py_shell_split`, `sh_e_ext_count`, `sh_rotate` (`sh_rotate` fails every tdd DS+DS seed).
+  Only 6 of 29 navigator test files pass the reference (seeds 1, 2: 8, 6). With valid tests it solved 6 of 6, with
+  wrong ones 19 of 23. `sh_csv_col` took 65 min (21k driver tokens chasing wrong tests in attempt 1, passed attempt 2).
+  No attempt capped, no "no fenced code block" fault. Slot A moved on to nav DS + driver Qwen3.8 (KT) s3 at 23:43.
