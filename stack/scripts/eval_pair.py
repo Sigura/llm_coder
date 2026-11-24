@@ -19,6 +19,7 @@ harness.
 Keys: --nav-key-file / --driver-key-file (a path; the key is read from it, never printed).
 """
 import argparse
+import http.client
 import importlib.util
 import json
 import os
@@ -34,6 +35,7 @@ from pathlib import Path
 
 LOAD_RETRIES = 30
 LOAD_RETRY_SEC = 30
+STREAM_IDLE_SEC = 1800
 NAV_SYSTEM = (
     "You are the navigator in a pair-programming session. Another model, the driver, writes the code; you plan, "
     "set the checks it must pass, and review. Be brief and concrete. Never write the whole file yourself."
@@ -116,7 +118,8 @@ class Model:
 
     def chat(self, messages, max_tokens=None) -> tuple[str, bool, dict, float]:
         body = {"messages": messages, "seed": self.seed, "max_tokens": max_tokens or self.max_tokens,
-                "chat_template_kwargs": {"enable_thinking": self.think}, **self.sampling}
+                "chat_template_kwargs": {"enable_thinking": self.think}, "stream": True,
+                "stream_options": {"include_usage": True}, **self.sampling}
         if self.model:
             body["model"] = self.model
         headers = {"Content-Type": "application/json"}
@@ -127,18 +130,36 @@ class Model:
         for attempt in range(1, LOAD_RETRIES + 1):
             start = time.monotonic()
             try:
-                # a 32k-token reply at ~9 tok/s (KT decoding two streams) takes just over an hour
-                with urllib.request.urlopen(req, timeout=7200) as resp:
-                    data = json.load(resp)
-                break
-            except (urllib.error.URLError, ConnectionError) as e:
+                return self._read_stream(req, start)
+            except (urllib.error.URLError, ConnectionError, http.client.IncompleteRead) as e:
                 if isinstance(e, urllib.error.HTTPError) and e.code < 500 or attempt == LOAD_RETRIES:
                     raise
                 print(f"  {self.url}: {e}; retry {attempt}/{LOAD_RETRIES} in {LOAD_RETRY_SEC} s", flush=True)
                 time.sleep(LOAD_RETRY_SEC)
-        choice = data["choices"][0]
-        return ((choice["message"].get("content") or "").strip(), choice.get("finish_reason") == "length",
-                data.get("usage", {}), time.monotonic() - start)
+
+    @staticmethod
+    def _read_stream(req, start) -> tuple[str, bool, dict, float]:
+        # streamed, the timeout limits the silence between tokens rather than the whole reply: a 32k-token reply
+        # takes over an hour on KT decoding two streams; the first token waits for the prefill
+        parts, finish, usage = [], None, None
+        with urllib.request.urlopen(req, timeout=STREAM_IDLE_SEC) as resp:
+            for line in resp:
+                line = line.strip()
+                if not line.startswith(b"data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == b"[DONE]":
+                    break
+                chunk = json.loads(payload)
+                usage = chunk.get("usage") or usage
+                for choice in chunk.get("choices") or []:
+                    parts.append((choice.get("delta") or {}).get("content") or "")
+                    finish = choice.get("finish_reason") or finish
+        if finish is None:
+            raise ConnectionError("stream ended without a finish_reason")
+        if usage is None:
+            raise RuntimeError(f"{req.full_url}: no usage in the stream (stream_options.include_usage unsupported?)")
+        return "".join(parts).strip(), finish == "length", usage, time.monotonic() - start
 
 
 def numbered(code: str) -> str:
