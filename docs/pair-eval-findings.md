@@ -283,3 +283,11 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   Only 6 of 29 navigator test files pass the reference (seeds 1, 2: 8, 6). With valid tests it solved 6 of 6, with
   wrong ones 19 of 23. `sh_csv_col` took 65 min (21k driver tokens chasing wrong tests in attempt 1, passed attempt 2).
   No attempt capped, no "no fenced code block" fault. Slot A moved on to nav DS + driver Qwen3.8 (KT) s3 at 23:43.
+- DeepSeek (KT) navigating Qwen3.8, seed 3: 23 of 29, pass@1 15, tests@2 26.35, in 9,139 s (seeds 1, 2: 20 / 13,
+  23 / 14). Mean of 3 seeds **22.0 pass@2**, **14.0 pass@1** (score 0.68), +5.3 over Qwen3.8 alone: level with the
+  DeepSeek reviewer (22.0, pass@1 13.7, n 3) and the Qwen3.8 tests-first self-pair (22.3, n 3), which needs no DeepSeek.
+  Kotlin 4/4, Python 11/16, bash 8/9. Failed `py_apply_patch`, `py_e_config_merge`, `py_e_duration`, `py_expr_eval`,
+  `py_shell_split`, `sh_e_ext_count`; `py_expr_eval` failed all 3 seeds, but `py_ini_interp`, `sh_csv_col` and
+  `sh_env_export` (failed seeds 1 and 2) passed. 4 "no fenced code block" faults (`py_apply_patch` #1, `py_ini_interp`
+  #1, `sh_e_ext_count` #1 and #2), so the revise-turn fault still costs ~1 task per seed. Slot A moved on to tdd nav DS
+  + driver Qwen3.8 s2 at 01:44.
