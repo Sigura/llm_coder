@@ -61,7 +61,7 @@ python3 stack/scripts/eval_pair.py \
 python3 stack/scripts/eval_pair.py ... --tests-first --label pair-qwen3.8-nav-deepseek-kt-tdd-s1
 
 python3 stack/scripts/pair_matrix.py             # print the report tables from all result files
-python3 stack/scripts/pair_matrix.py --write     # update them in $LLM_ROOT/results/pair-eval/pair-report.md
+python3 stack/scripts/pair_matrix.py --write     # update them in docs/pair-eval-report.md
 
 python3 stack/scripts/eval_opencode.py --help    # OpenCode as an agent on the same tasks: build, review, one fix turn
 ```
@@ -82,8 +82,9 @@ llm/engines/alt/kt-wrapper/.venv/bin/python stack/scripts/kt_placement_from_dump
   rollback, tuning, troubleshooting.
 - [docs/token-speed.md](docs/token-speed.md): what decode and prefill speed each model and engine reaches on this
   host, and why.
-- Study reports, copied from `LLM_ROOT/results`:
-  [pair programming vs solo and review](docs/pair-eval-report.md),
+- Study reports (raw results stay in `LLM_ROOT/results`):
+  pair programming vs solo and review: [winners](docs/pair-eval-winners.md), [report](docs/pair-eval-report.md),
+  [findings per run](docs/pair-eval-findings.md),
   [DeepSeek token-generation study](docs/deepseek-tg-study-2026-11-13.md),
   [two-model setup](docs/two-model-2026-11-13.md),
   [speed comparison of models and engines](docs/speed-comparison-2026-11-21.md).

@@ -1,7 +1,5 @@
 # DeepSeek V4.1 Flash 1017: warm token-generation study (2026-11-13)
 
-Copy of `LLM_ROOT/results/tg-study-2026-11-13/report.md` as of 2026-11-22; the live file there may be newer.
-
 Host: 2× EPYC 7601 (Zen1, AVX2, 8 NUMA nodes, 503 GB), 3× RTX 4090 + RTX 3090 Ti, root and models on one NVMe
 (XPG S70 Blade). Engine llama.cpp b12247. All numbers are **warm**: model fully in the page cache, ~0 disk reads
 during generation (the disk column shows it where it was not 0).
@@ -117,7 +115,7 @@ log (`ipmitool sel elist`), PSU rating check, panic sysctls + netconsole. The ne
 - Results before the first host restart (unsloth 4-GPU server 7.1/7.3) were with mmap-fault placement; after it,
   with the warm-up script. Physical GPU order: tests before 18:40 that said "CUDA0,CUDA1" ran on physical GPUs 0 and 2.
 - Other jobs on the host (GPU and disk) disturbed some runs; the disk column shows where.
-- Raw data: `results.md`, `all.log`, `*.jsonl`, `srv-*.log` and `telemetry.log` in this folder.
+- Raw data: `results.md`, `all.log`, `*.jsonl`, `srv-*.log` and `telemetry.log` in `LLM_ROOT/results/tg-study-2026-11-13/`.
 
 ## Operating notes
 

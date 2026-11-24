@@ -1,7 +1,5 @@
 # Speed comparison: models, engines and combinations (2026-11-21)
 
-Copy of `LLM_ROOT/results/kt-review-2026-11-21/speed-comparison.md` as of 2026-11-22; the live file there may be newer.
-
 Host: 2× EPYC 7601 (8 NUMA nodes), 503 GB RAM, GPUs 0,2,3 RTX 4090, GPU 1 RTX 3090 Ti (power-capped).
 pp = prompt (prefill) tok/s, tg = decode tok/s. Unless noted: real coding requests through the server,
 req-2 = 8,041 prompt tokens, req-3 = 44,484 prompt tokens, 1,024 output tokens.

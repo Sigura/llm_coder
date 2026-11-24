@@ -10,12 +10,20 @@ The navigator keeps one conversation per task, so llama-server reuses its prompt
 --tests-first: after the plan the navigator writes its own test file from the task text (burnish's harness format);
 the driver sees it, and before the real tests the driver's file runs against it, with up to --tdd-rounds fix turns.
 Whether the navigator's tests pass on the task's reference solution is recorded, never shown to the models.
+--batch N: N consecutive tasks share one navigator and one driver conversation, like a PR with N changes: one plan
+turn, one driver turn writing all N files, one review turn over all of them, one revision turn for the files the
+review flagged; after the tests, one advice turn and one fix turn for the failed tasks. Scored per task; each turn's
+time and tokens are split evenly over the tasks in it.
+--task-dir: task folders in burnish's format from elsewhere (e.g. stack/eval/tasks-joined), still run with burnish's
+harness.
 Keys: --nav-key-file / --driver-key-file (a path; the key is read from it, never printed).
 """
 import argparse
+import http.client
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -27,6 +35,7 @@ from pathlib import Path
 
 LOAD_RETRIES = 30
 LOAD_RETRY_SEC = 30
+STREAM_IDLE_SEC = 1800
 NAV_SYSTEM = (
     "You are the navigator in a pair-programming session. Another model, the driver, writes the code; you plan, "
     "set the checks it must pass, and review. Be brief and concrete. Never write the whole file yourself."
@@ -72,6 +81,25 @@ TDD_FIX = (
     "Your file fails the navigator's tests:\n```\n{output}\n```\nFix the code. If a failing test contradicts the task, "
     "name it and say why in one line, and keep the behaviour the task requires. Reply with the complete `{file}`."
 )
+BATCH_SYSTEM = (
+    "You are an expert software engineer. You get several tasks at once. For every file you are asked for, reply "
+    "with a line `### <task id>` followed by the complete contents of that task's file in a single fenced code block. "
+    "Do not omit any part of a file."
+)
+BATCH_PLAN_ASK = (
+    "Write the driver's plan for each task: the approach, the edge cases, the pitfalls, and 3-6 concrete checks "
+    "(input -> expected result). For each task a line `### <task id>`, then at most 15 lines, no code blocks."
+)
+BATCH_REVIEW_ASK = (
+    "The driver wrote these files:\n\n{files}\n\nCheck each against its task and your plan. For each task a line "
+    "`### <task id>`, then at most 10 lines and nothing else: the single word OK, or one line per real defect in the "
+    "form `line: problem -> fix`. Ignore style."
+)
+BATCH_FAIL_ASK = (
+    "The tests failed on these files:\n\n{outputs}\n\nTell the driver what to change: for each task a line "
+    "`### <task id>`, then at most 10 lines, no code blocks."
+)
+HEADER = re.compile(r"^#{1,6}[ \t]*`?([A-Za-z0-9_.-]+)`?[ \t:]*$", re.M)
 
 
 def load_runner(path: Path):
@@ -90,7 +118,8 @@ class Model:
 
     def chat(self, messages, max_tokens=None) -> tuple[str, bool, dict, float]:
         body = {"messages": messages, "seed": self.seed, "max_tokens": max_tokens or self.max_tokens,
-                "chat_template_kwargs": {"enable_thinking": self.think}, **self.sampling}
+                "chat_template_kwargs": {"enable_thinking": self.think}, "stream": True,
+                "stream_options": {"include_usage": True}, **self.sampling}
         if self.model:
             body["model"] = self.model
         headers = {"Content-Type": "application/json"}
@@ -101,17 +130,36 @@ class Model:
         for attempt in range(1, LOAD_RETRIES + 1):
             start = time.monotonic()
             try:
-                with urllib.request.urlopen(req, timeout=3600) as resp:
-                    data = json.load(resp)
-                break
-            except (urllib.error.URLError, ConnectionError) as e:
+                return self._read_stream(req, start)
+            except (urllib.error.URLError, ConnectionError, http.client.IncompleteRead) as e:
                 if isinstance(e, urllib.error.HTTPError) and e.code < 500 or attempt == LOAD_RETRIES:
                     raise
                 print(f"  {self.url}: {e}; retry {attempt}/{LOAD_RETRIES} in {LOAD_RETRY_SEC} s", flush=True)
                 time.sleep(LOAD_RETRY_SEC)
-        choice = data["choices"][0]
-        return ((choice["message"].get("content") or "").strip(), choice.get("finish_reason") == "length",
-                data.get("usage", {}), time.monotonic() - start)
+
+    @staticmethod
+    def _read_stream(req, start) -> tuple[str, bool, dict, float]:
+        # streamed, the timeout limits the silence between tokens rather than the whole reply: a 32k-token reply
+        # takes over an hour on KT decoding two streams; the first token waits for the prefill
+        parts, finish, usage = [], None, None
+        with urllib.request.urlopen(req, timeout=STREAM_IDLE_SEC) as resp:
+            for line in resp:
+                line = line.strip()
+                if not line.startswith(b"data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == b"[DONE]":
+                    break
+                chunk = json.loads(payload)
+                usage = chunk.get("usage") or usage
+                for choice in chunk.get("choices") or []:
+                    parts.append((choice.get("delta") or {}).get("content") or "")
+                    finish = choice.get("finish_reason") or finish
+        if finish is None:
+            raise ConnectionError("stream ended without a finish_reason")
+        if usage is None:
+            raise RuntimeError(f"{req.full_url}: no usage in the stream (stream_options.include_usage unsupported?)")
+        return "".join(parts).strip(), finish == "length", usage, time.monotonic() - start
 
 
 def numbered(code: str) -> str:
@@ -227,6 +275,94 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
     return out
 
 
+def sections(reply: str, ids) -> dict:
+    """{task id: text under its `### <id>` header} for the ids that have a header in the reply."""
+    reply = re.sub(r"<think>.*?</think>", "", reply, flags=re.S)
+    heads = [m for m in HEADER.finditer(reply) if m[1] in ids]
+    out = {}
+    for m, nxt in zip(heads, heads[1:] + [None]):
+        out.setdefault(m[1], reply[m.end():nxt.start() if nxt else len(reply)].strip())
+    return out
+
+
+def solve_batch(tasks, nav: Model, drv: Model, rce, args) -> list[dict]:
+    by_id = {t["id"]: t for t in tasks}
+    listing = "\n\n".join(f"### {t['id']}\n{t['prompt'].strip()}\n\nWrite the file `{t['file']}`." for t in tasks)
+    nav_msgs = [{"role": "system", "content": NAV_SYSTEM}, {"role": "user", "content": f"{listing}\n\n{BATCH_PLAN_ASK}"}]
+    stats = {t["id"]: {"seconds": 0.0, "nav_tokens": 0, "drv_tokens": 0} for t in tasks}
+
+    def turn(model, msgs, ids, role, max_tokens=None):
+        reply, capped, usage, secs = model.chat(msgs, max_tokens)
+        for i in ids:
+            stats[i]["seconds"] += secs / len(ids)
+            stats[i][f"{role}_tokens"] += (usage.get("completion_tokens") or 0) / len(ids)
+        return reply, capped
+
+    plan, _ = turn(nav, nav_msgs, list(by_id), "nav", args.nav_max_tokens)
+    nav_msgs.append({"role": "assistant", "content": plan})
+    plans = sections(plan, by_id)
+    drv_msgs = [{"role": "system", "content": BATCH_SYSTEM},
+                {"role": "user", "content": f"{listing}\n\nThe navigator's plan:\n{plan}"}]
+    results = {t["id"]: {"id": t["id"], "lang": t["lang"], "batch": list(by_id), "attempts": []} for t in tasks}
+    active = list(by_id)
+    for _ in range(args.attempts):
+        reply, capped = turn(drv, drv_msgs, active, "drv")
+        files = sections(reply, active)
+        codes = {i: rce.extract_code(files.get(i, "")) for i in active}
+        verdicts = {}
+        written = [i for i in active if codes[i] is not None]
+        if written and args.review == "always":
+            shown = "\n\n".join(f"### {i}\n`{by_id[i]['file']}`:\n{numbered(codes[i])}" for i in written)
+            nav_msgs.append({"role": "user", "content": BATCH_REVIEW_ASK.format(files=shown)})
+            review, _ = turn(nav, nav_msgs, written, "nav", args.nav_max_tokens * len(written))
+            nav_msgs.append({"role": "assistant", "content": review})
+            verdicts = sections(review, written)
+            flagged = [i for i in written if verdicts.get(i, "OK").rstrip(".").upper() != "OK"]
+            if flagged:
+                found = "\n\n".join(f"### {i}\n{verdicts[i]}" for i in flagged)
+                drv_msgs += [{"role": "assistant", "content": reply},
+                             {"role": "user", "content": f"The navigator reported:\n```\n{found}\n```\nFix the real "
+                                                         f"defects (ignore findings that are wrong) and reply with the "
+                                                         f"corrected complete files of these tasks only: "
+                                                         f"{', '.join(flagged)}."}]
+                reply, capped = turn(drv, drv_msgs, flagged, "drv")
+                revised = sections(reply, flagged)
+                for i in flagged:
+                    new = rce.extract_code(revised.get(i, ""))
+                    # without --keep-unrevised a revision without a code block fails the attempt (the original protocol)
+                    codes[i] = new if new is not None or not args.keep_unrevised else codes[i]
+        failed = {}
+        for i in active:
+            if codes[i] is None:
+                passed = False
+                output = (f"reply cut off at --max-tokens {args.max_tokens}" if capped else
+                          "no fenced code block under its header in the reply")
+            else:
+                passed, output = rce.run_tests(by_id[i], codes[i])
+            output = output[-rce.FEEDBACK_CHARS:]
+            s = stats[i]
+            results[i]["attempts"].append({
+                "passed": passed, "capped": capped, "output": output, "seconds": round(s["seconds"], 1),
+                "completion_tokens": round(s["drv_tokens"] + s["nav_tokens"]), "driver_tokens": round(s["drv_tokens"]),
+                "navigator_tokens": round(s["nav_tokens"]), "code": codes[i], "review": verdicts.get(i),
+                **({"plan": plans.get(i)} if len(results[i]["attempts"]) == 0 else {})})
+            stats[i] = {"seconds": 0.0, "nav_tokens": 0, "drv_tokens": 0}
+            if not passed:
+                failed[i] = output
+        active = list(failed)
+        if not active or len(results[active[0]]["attempts"]) == args.attempts:
+            break
+        outputs = "\n\n".join(f"### {i}\n```\n{o}\n```" for i, o in failed.items())
+        nav_msgs.append({"role": "user", "content": BATCH_FAIL_ASK.format(outputs=outputs)})
+        advice, _ = turn(nav, nav_msgs, active, "nav", args.nav_max_tokens * len(active))
+        nav_msgs.append({"role": "assistant", "content": advice})
+        drv_msgs += [{"role": "assistant", "content": reply},
+                     {"role": "user", "content": f"The tests failed:\n\n{outputs}\n\nThe navigator says:\n{advice}\n"
+                                                 f"Reply with the corrected complete files of these tasks only: "
+                                                 f"{', '.join(active)}."}]
+    return [results[t["id"]] for t in tasks]
+
+
 def sampling(args, prefix) -> dict:
     out = {"temperature": getattr(args, f"{prefix}_temperature")}
     for key in ("top_p", "top_k", "min_p", "presence_penalty"):
@@ -275,12 +411,19 @@ def main():
                    help="navigator writes a test file after the plan; the driver's file must pass it first")
     p.add_argument("--tdd-rounds", type=int, default=2, help="driver fix turns against the navigator's tests")
     p.add_argument("--tests-max-tokens", type=int, default=6000, help="navigator tokens for the test file")
+    p.add_argument("--batch", type=int, default=1, help="tasks per shared session (see the module doc)")
+    p.add_argument("--task-dir", help="task folders to run instead of burnish's eval/coding/tasks")
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/pair-eval"))
     args = p.parse_args()
+    if args.batch < 1:
+        p.error("--batch must be >= 1")
+    if args.batch > 1 and (args.tests_first or args.architect or args.answer_review or args.review != "always"):
+        p.error("--batch supports only the original protocol, optionally with --keep-unrevised and --nav-think")
 
     root = Path(args.burnish)
     rce = load_runner(root / "run_coding_eval.py")
-    tasks = rce.load_tasks(root / "tasks", args.tasks, set(args.langs.split(",")))
+    tasks = rce.load_tasks(Path(args.task_dir) if args.task_dir else root / "tasks", args.tasks,
+                           set(args.langs.split(",")))
     if not tasks:
         p.error("no tasks matched")
     nav = Model(args.nav_url, args.nav_model, args.nav_key_file, sampling(args, "nav"), args.nav_max_tokens, args.seed,
@@ -295,16 +438,18 @@ def main():
     done = {r["id"] for r in results}
     if done:
         print(f"resuming {partial}: {len(done)} tasks done", flush=True)
-    for task in tasks:
-        if task["id"] in done:
+    for b in range(0, len(tasks), args.batch):
+        group = [t for t in tasks[b:b + args.batch] if t["id"] not in done]
+        if not group:
             continue
-        r = solve(task, nav, drv, rce, args)
-        results.append(r)
+        rs = solve_batch(group, nav, drv, rce, args) if args.batch > 1 else [solve(group[0], nav, drv, rce, args)]
+        results += rs
         tmp = partial.with_suffix(".tmp")
         tmp.write_text(json.dumps({"results": results}, indent=1))
         os.replace(tmp, partial)
-        marks = "".join("+" if a["passed"] else "-" for a in r["attempts"])
-        print(f"{task['id']:<28} {marks:<3} {sum(a['seconds'] for a in r['attempts']):7.1f} s", flush=True)
+        for r in rs:
+            marks = "".join("+" if a["passed"] else "-" for a in r["attempts"])
+            print(f"{r['id']:<28} {marks:<3} {sum(a['seconds'] for a in r['attempts']):7.1f} s", flush=True)
     summary = rce.summarize(results, args.attempts)
     for lang, s in summary.items():
         rs = [r for r in results if lang in ("all", r["lang"])]

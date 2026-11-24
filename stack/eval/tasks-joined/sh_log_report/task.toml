@@ -1,0 +1,76 @@
+lang = "bash"
+file = "solution.sh"
+prompt = """
+Write one bash script `solution.sh SUBCOMMAND ARGS...` with four subcommands. Parts 1-3 describe a script
+`solution.sh ...`: implement each as the subcommand named in its heading, called as `solution.sh <subcommand>
+ARGS...` with exactly the behaviour, output and exit codes described for the whole script. An unknown or missing
+subcommand prints a usage message to stderr and exits 2.
+
+## Part 1: subcommand `access`
+
+Write `solution.sh LOGFILE...` that summarizes web server access logs in combined log format, e.g.
+
+`203.0.113.9 - - [14/Nov/2026:10:02:03 +0300] "GET /api/v1/items?id=3 HTTP/1.1" 200 5120 "-" "curl/8.5"`
+
+Files ending in `.gz` are read with `zcat`; `-` means stdin. Lines that don't match the format (wrong quoting,
+non-numeric status) are counted as malformed and otherwise skipped. A size of `-` counts as 0 bytes.
+
+Output exactly these sections:
+```
+requests: <number of valid lines>
+malformed: <number of malformed lines>
+status:
+  <code> <count>          (one line per status code, ascending code)
+top_ips:
+  <ip> <total bytes>      (top 3 by total bytes, ties by ip ascending in byte order)
+top_paths:
+  <path> <count>          (top 3 request paths WITHOUT the query string, by count desc, ties path ascending)
+```
+A section with no entries still prints its header. Missing input files: message to stderr, exit 1, no output.
+
+## Part 2: subcommand `words`
+
+Write a bash script `solution.sh` that reads text on stdin and prints the N most frequent words.
+
+Usage: `solution.sh [-n N] [-i]` (N defaults to 10). `-i` makes counting case-insensitive (words are
+lowercased). A word is a maximal run of ASCII letters, digits and apostrophes, but leading/trailing apostrophes
+are stripped and a token that is only apostrophes is ignored. Output lines are `COUNT WORD` (single space), sorted
+by count descending, then word ascending in byte order (LC_ALL=C). Fewer than N distinct words prints all of them;
+empty input prints nothing and exits 0. An invalid option or a non-positive/non-integer N prints a usage message to
+stderr and exits 2.
+
+## Part 3: subcommand `csv`
+
+Write `solution.sh [-d DELIM] [-s] COLUMN [FILE]` that aggregates one column of an RFC 4180 CSV file with a header
+row (reads stdin when FILE is absent).
+
+- COLUMN is a header name (exact match) or `#N` for the 1-based column index.
+- Fields may be quoted with `"`; quoted fields may contain the delimiter, `""` (an escaped quote) and newlines.
+  Lines may end with `\n` or `\r\n`. DELIM is a single character (default `,`).
+- Without `-s`, print the values of the column, one per line (embedded newlines in a value are printed as the
+  two characters `\n`).
+- With `-s`, print `count=C sum=S min=M max=X` over the numeric values (integers or decimals with optional
+  sign, e.g. `-3`, `2.50`, `.5`); non-numeric and empty values are skipped and not counted. Numbers are printed
+  with `%g` formatting. If there are no numeric values print `count=0`.
+- A row with fewer fields than the header is treated as having empty fields. Unknown column: message to stderr,
+  exit 3. Unterminated quote at end of input: message to stderr, exit 4, no stdout.
+
+## Part 4: subcommand `report`
+
+`solution.sh report [-n N] MANIFEST` summarizes the access logs listed in a manifest CSV, using the parts above.
+
+- MANIFEST is a CSV file read with the rules of part 3 (default delimiter). Its column `log` lists log file paths
+  (relative to the current directory, `.gz` allowed, in manifest order). An optional column `enabled`: only rows
+  whose value is exactly `yes` are used; without that column every row is used. Rows with an empty `log` are skipped.
+- Output: the `access` output (part 1) for all used logs together, followed by a section
+  ```
+  top_words:
+    <count> <word>      (top N, default 3)
+  ```
+  over the request paths (without query string) of the valid log lines, counted with the rules of part 2 with `-i`.
+  With no used logs, print the part 1 output for empty input followed by `top_words:`.
+- Errors, all with a message on stderr and no stdout: N not a positive integer or an unknown option -> exit 2;
+  no `log` column -> exit 3; unterminated quote in MANIFEST -> exit 4; MANIFEST or a used log missing -> exit 1.
+
+Environment: GNU bash 5.2, GNU coreutils, GNU sed/grep/find, and `awk` is mawk (POSIX awk: do not rely on gawk-only features such as `asort`, `PROCINFO`, `gensub`, `strftime`). No Python, Perl or jq.
+"""

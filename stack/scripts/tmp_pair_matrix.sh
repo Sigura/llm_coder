@@ -3,14 +3,15 @@
 # turn. Usage: tmp_pair_matrix.sh NAV:DRIVER [NAV:DRIVER ...]   with NAV/DRIVER in ds, q8, q6
 #   ds = DeepSeek V4.1 Flash on KTransformers :8080, q8 = Qwen3.8-27B :8086, q6 = Qwen3.6-35B-A3B MTP :8085
 # Each model gets the sampling of its solo eval runs in either role. Env: SEEDS (default 1 2 3), EXTRA (more
-# eval_pair.py args), TAG (label suffix for protocol variants), Q8_URL (another Qwen3.8 server). A finished seed is skipped, an interrupted one resumes.
+# eval_pair.py args), TAG (label suffix for protocol variants), Q8_URL (another Qwen3.8 server), OUT (results
+# folder, default pair-eval; e.g. pair-eval-joined for --task-dir runs). A finished seed is skipped, an interrupted one resumes.
 set -euo pipefail
 cd "$(dirname "$0")"
 source ./lib.sh
 load_global
 SEEDS=${SEEDS:-1 2 3}
 SECRETS=$SECRETS_DIR
-OUT=$RESULTS_DIR/pair-eval
+OUT=${OUT:-$RESULTS_DIR/pair-eval}
 declare -A URL=([ds]=http://127.0.0.1:8080/v1 [q8]=${Q8_URL:-http://127.0.0.1:8086/v1} [q6]=http://127.0.0.1:8085/v1)
 declare -A MODEL=([ds]=deepseek-v4.1-flash [q8]=qwen3.8-27b [q6]=qwen3.6-35b-a3b-mtp)
 declare -A KEY=([ds]=$SECRETS/deepseek-v4.1-flash-1017.key [q8]=$SECRETS/qwen3.8-27b.key [q6]=$SECRETS/qwen3.6-35b-a3b-mtp.key)
@@ -36,7 +37,12 @@ for combo in "$@"; do
     for id in ${combo/:/ }; do
         [[ -n ${URL[$id]:-} ]] || { echo "unknown model id '$id' in $combo" >&2; exit 1; }
         [[ -r ${KEY[$id]} ]] || { echo "no key file ${KEY[$id]}" >&2; exit 1; }
-        curl -sf -m 60 -o /dev/null "${URL[$id]%/v1}/health" || { echo "no server for $id on ${URL[$id]}" >&2; exit 1; }
+        # KT answers 503 to /health while a long prefill blocks its detokenizer heartbeat: retry before giving up
+        for try in $(seq 10); do
+            curl -sf -m 60 -o /dev/null "${URL[$id]%/v1}/health" && break
+            (( try < 10 )) || { echo "no server for $id on ${URL[$id]}" >&2; exit 1; }
+            sleep 30
+        done
     done
 done
 
@@ -50,7 +56,7 @@ for combo in "$@"; do
             continue
         fi
         echo "== $(date +%T) $label"
-        python3 eval_pair.py "${args[@]}" --seed "$seed" --label "$label" "${extra[@]}"
+        python3 eval_pair.py "${args[@]}" --seed "$seed" --label "$label" --out-dir "$OUT" "${extra[@]}"
     done
 done
 echo "== $(date +%T) done"
