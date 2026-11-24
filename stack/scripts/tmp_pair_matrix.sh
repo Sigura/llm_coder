@@ -37,7 +37,12 @@ for combo in "$@"; do
     for id in ${combo/:/ }; do
         [[ -n ${URL[$id]:-} ]] || { echo "unknown model id '$id' in $combo" >&2; exit 1; }
         [[ -r ${KEY[$id]} ]] || { echo "no key file ${KEY[$id]}" >&2; exit 1; }
-        curl -sf -m 60 -o /dev/null "${URL[$id]%/v1}/health" || { echo "no server for $id on ${URL[$id]}" >&2; exit 1; }
+        # KT answers 503 to /health while a long prefill blocks its detokenizer heartbeat: retry before giving up
+        for try in $(seq 10); do
+            curl -sf -m 60 -o /dev/null "${URL[$id]%/v1}/health" && break
+            (( try < 10 )) || { echo "no server for $id on ${URL[$id]}" >&2; exit 1; }
+            sleep 30
+        done
     done
 done
 

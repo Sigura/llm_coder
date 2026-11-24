@@ -39,9 +39,27 @@ FIXED = [
      {"1": "20261115-001139-qwen3.6-mtp-rec-s1.json", "2": "20261115-002700-qwen3.6-mtp-rec-s2.json",
       "3": "20261115-004521-qwen3.6-mtp-rec-s3.json"}),
     ("q8-rds", "Q8+rDS", ("Qwen3.8", "DeepSeek reviews"), "Qwen3.8 writes, DeepSeek reviews",
-     {"1": "20261115-172203-qwen3.8-27b-review-deepseek-v4.1-flash-s1.json"}),
+     {"1": "20261115-172203-qwen3.8-27b-review-deepseek-v4.1-flash-s1.json",
+      "2": "20261123-140902-qwen3.8-27b-review-deepseek-v4.1-flash-s2.json",
+      "3": "20261123-172650-qwen3.8-27b-review-deepseek-v4.1-flash-s3.json"}),
     ("q8-rq6", "Q8+rQ6", ("Qwen3.8", "Qwen3.6 MTP reviews"), "Qwen3.8 writes, Qwen3.6 MTP reviews",
-     {"1": "20261115-220245-qwen3.8-27b-review-qwen3.6-35b-a3b-mtp-s1.json"}),
+     {"1": "20261115-220245-qwen3.8-27b-review-qwen3.6-35b-a3b-mtp-s1.json",
+      "2": "20261123-095050-qwen3.8-27b-review-qwen3.6-35b-a3b-mtp-s2.json",
+      "3": "20261123-112424-qwen3.8-27b-review-qwen3.6-35b-a3b-mtp-s3.json"}),
+    ("q6-rq8", "Q6+rQ8", ("Qwen3.6 MTP", "Qwen3.8 reviews"), "Qwen3.6 MTP writes, Qwen3.8 reviews",
+     {"1": "20261123-203219-qwen3.6-35b-a3b-mtp-review-qwen3.8-27b-s1.json",
+      "2": "20261123-210806-qwen3.6-35b-a3b-mtp-review-qwen3.8-27b-s2.json",
+      "3": "20261123-215948-qwen3.6-35b-a3b-mtp-review-qwen3.8-27b-s3.json"}),
+    ("ds-rq8", "DS+rQ8", ("DeepSeek V4.1 Flash (KT)", "Qwen3.8 reviews"), "DeepSeek writes, Qwen3.8 reviews",
+     {"1": "20261123-233357-deepseek-v4.1-flash-review-qwen3.8-27b-s1.json",
+      "2": "20261124-031048-deepseek-v4.1-flash-review-qwen3.8-27b-s2.json",
+      "3": "20261124-080655-deepseek-v4.1-flash-review-qwen3.8-27b-s3.json"}),
+    ("ds-rds", "DS+rDS", ("DeepSeek V4.1 Flash (KT)", "DeepSeek reviews"), "DeepSeek writes, DeepSeek reviews",
+     {"1": "20261124-005824-deepseek-v4.1-flash-review-deepseek-v4.1-flash-s1.json",
+      "2": "20261124-044014-deepseek-v4.1-flash-review-deepseek-v4.1-flash-s2.json",
+      "3": "20261124-083412-deepseek-v4.1-flash-review-deepseek-v4.1-flash-s3.json"}),
+    ("q6-rds", "Q6+rDS", ("Qwen3.6 MTP", "DeepSeek reviews"), "Qwen3.6 MTP writes, DeepSeek reviews",
+     {"1": "20261123-223223-qwen3.6-35b-a3b-mtp-review-deepseek-v4.1-flash-s1.json"}),
 ]
 SOLO_SEEDS = {"ds-solo": ["2", "3"], "q8-solo": ["1", "2", "3"], "q6-solo": ["1", "2", "3"]}
 SHORT = {("deepseek", "qwen3.8"): "PAIR", ("deepseek-kt", "qwen3.8"): "PAIR-KT"}  # (nav, driver), names used in the prose
@@ -140,6 +158,10 @@ def what_was_tested(all_setups):
     return table(["setup", "writer (driver)", "planner / reviewer (navigator)", "seeds"], rows)
 
 
+def score(p1, p2):
+    return (0.3 * p1 + 0.7 * p2) / 29
+
+
 def headline(all_setups):
     rows = []
     for key, col, _, name, seeds in all_setups:
@@ -159,10 +181,11 @@ def headline(all_setups):
         t = "—" if not secs else (f"{secs[0]:,.0f} s" if len(secs) == 1 else f"{min(secs):,.0f}–{max(secs):,.0f} s")
         if key in NOTES or (isinstance(key, tuple) and key[:2] in NOTES):
             t += f" ({NOTES.get(key) or NOTES[key[:2]]})"
-        rows.append((mean(p2) if p2 else -1, (display_name(key, col, name), ", ".join(parts),
-                     f"{mean(p2):.1f}" if len(p2) > 1 else "—", f"{mean(p1):.1f}" if len(p1) > 1 else "—", t)))
-    rows.sort(key=lambda r: -r[0])
-    return table(["setup", "pass@2 per seed", "mean", "pass@1 mean", "time per seed"], [r for _, r in rows])
+        sc = score(mean(p1), mean(p2)) if p2 else -1
+        rows.append(((sc, mean(p2) if p2 else -1), (display_name(key, col, name), f"{sc:.2f}" if p2 else "—", ", ".join(parts),
+                     f"{mean(p2):.1f}" if len(p2) > 1 else (p2[0] if p2 else "—"), f"{mean(p1):.1f}" if len(p1) > 1 else (p1[0] if p1 else "—"), t)))
+    rows.sort(key=lambda r: (-r[0][0], -r[0][1]))
+    return table(["setup", "score", "pass@2 per seed", "mean", "pass@1 mean", "time per seed"], [r for _, r in rows])
 
 
 def summary(all_setups):

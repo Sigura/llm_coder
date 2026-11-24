@@ -127,7 +127,8 @@ class Model:
         for attempt in range(1, LOAD_RETRIES + 1):
             start = time.monotonic()
             try:
-                with urllib.request.urlopen(req, timeout=3600) as resp:
+                # a 32k-token reply at ~9 tok/s (KT decoding two streams) takes just over an hour
+                with urllib.request.urlopen(req, timeout=7200) as resp:
                     data = json.load(resp)
                 break
             except (urllib.error.URLError, ConnectionError) as e:
