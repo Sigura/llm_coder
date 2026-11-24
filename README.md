@@ -83,7 +83,8 @@ llm/engines/alt/kt-wrapper/.venv/bin/python stack/scripts/kt_placement_from_dump
 - [docs/token-speed.md](docs/token-speed.md): what decode and prefill speed each model and engine reaches on this
   host, and why.
 - Study reports, copied from `LLM_ROOT/results`:
-  [pair programming vs solo and review](docs/pair-eval-report.md),
+  pair programming vs solo and review: [winners](docs/pair-eval-winners.md), [report](docs/pair-eval-report.md),
+  [findings per run](docs/pair-eval-findings.md),
   [DeepSeek token-generation study](docs/deepseek-tg-study-2026-11-13.md),
   [two-model setup](docs/two-model-2026-11-13.md),
   [speed comparison of models and engines](docs/speed-comparison-2026-11-21.md).
