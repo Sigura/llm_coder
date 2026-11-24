@@ -1,7 +1,7 @@
 # Pair programming eval: findings per run
 
-Copy of `LLM_ROOT/results/pair-eval/pair-findings.md` as of 2026-11-23 21:00; the live file there may be newer (remeasure and
-"+ reviewer" runs still running). Here `pair-winners.md`, `pair-report.md`, `pair-findings.md` are
+Copy of `LLM_ROOT/results/pair-eval/pair-findings.md` as of 2026-11-24 09:50; the live file there may be newer (tests-first
+and remeasure runs still running). Here `pair-winners.md`, `pair-report.md`, `pair-findings.md` are
 [pair-eval-winners.md](pair-eval-winners.md), [pair-eval-report.md](pair-eval-report.md),
 [pair-eval-findings.md](pair-eval-findings.md).
 
@@ -212,3 +212,55 @@ Files: `pair-winners.md` (winners + headline, short), `pair-report.md` (setup, g
   `py_fix_merge_intervals`, `py_semver_range`, `py_shell_split`, `sh_csv_col`, `sh_e_replace`, `sh_env_export`,
   `sh_retry`. 1 capped reply, no "no fenced code block" fault. Qwen3.6 on GPU 3 (:8085, user's GPU, lent for these
   runs), Qwen3.8 reviewer on :8086 (idle otherwise: r3/r4 paused 18:25 for the review runs).
+- Qwen3.6 MTP + Qwen3.8 review, seed 2: 15 of 29, pass@1 11, tests@2 22.52, in 2,069 s (seed 1: 16). Mean of 2 seeds
+  **15.5 pass@2**, 11.0 pass@1, against Qwen3.6 alone 9.7 / 7.0: +5.8 / +4.0, the gain holds on seed 2. Kotlin 3/4,
+  Python 6/16, bash 6/9. Failed `kt_fix_money`, `py_apply_patch`, `py_async_limit`, `py_e_duration`, `py_e_flatten`,
+  `py_expr_eval`, `py_fix_lru`, `py_fix_merge_intervals`, `py_ini_interp`, `py_semver_range`, `py_shell_split`,
+  `sh_access_log`, `sh_e_lowercase`, `sh_retry`; 9 of seed 1's 13 failures repeat, mostly Python. No "no fenced code
+  block" fault.
+- Qwen3.6 MTP + Qwen3.8 review, seed 3: 16 of 29, pass@1 10, tests@2 22.25, in 2,860 s (seeds 1, 2: 16 and 15). Mean of
+  3 seeds **15.7 pass@2**, 10.7 pass@1, against Qwen3.6 alone 9.7 / 7.0: +6.0 / +3.7, steady across seeds (the
+  opposite of the Qwen3.6 reviewer on Qwen3.8, whose gain fell apart on seed 3). A Qwen3.8 reviewer lifts Qwen3.6 to
+  about Qwen3.8 alone (16.7) at a similar time per seed (2.1–2.9k s vs 2.4–2.8k s), but needs both GPUs. Kotlin 3/4,
+  Python 8/16, bash 5/9; `py_apply_patch`, `py_async_limit`, `py_e_duration`, `py_expr_eval`,
+  `py_fix_merge_intervals`, `py_semver_range`, `py_shell_split` failed in all 3 seeds. No "no fenced code block" fault.
+- Qwen3.6 MTP + DeepSeek (KT) review, seed 1: 18 of 29, pass@1 11, tests@2 23.80, in 9,545 s (KT shared with two
+  DeepSeek review runs). Against Qwen3.6 alone 9.7 / 7.0: +8.3 / +4.0, and above the Qwen3.8 reviewer (15.7 over 3
+  seeds); one seed only, s2/s3 run at the end. Kotlin 3/4, Python 10/16, bash 5/9. Failed `kt_tokens`,
+  `py_async_limit`, `py_e_duration`, `py_expr_eval`, `py_fix_merge_intervals`, `py_semver_range`, `py_shell_split`,
+  `sh_csv_col`, `sh_e_replace`, `sh_env_export`, `sh_retry`; 5 of the 7 Python tasks that failed every Q6+rQ8 seed
+  fail again. One "no fenced code block" fault (`py_expr_eval`, attempt 1). Seconds per seed are 3–4x Q6+rQ8's: the
+  DeepSeek review turns dominate.
+- DeepSeek (KT) + Qwen3.8 review, seed 1: **29 of 29**, pass@1 22, tests@2 29.0, in 15,526 s (KT shared with the
+  DS+DS review run and, until 22:32, Q6+rDS). The first perfect pass@2 of any setup and seed; pass@1 22 also the best
+  (DS+DS pair 20.0 mean, DeepSeek alone 19.0). Kotlin 4/4, Python 16/16, bash 9/9. Second-attempt fixes:
+  `kt_fix_money`, `py_apply_patch`, `py_ini_interp`, `py_typed_load`, `sh_csv_col`, `sh_e_replace`, `sh_rotate`. No
+  "no fenced code block" fault. One seed only: DS+DS pair seed 2 also reached 29, then 25 on seed 3; s2, s3 running.
+- DeepSeek (KT) + DeepSeek review, seed 1: 27 of 29, pass@1 20, tests@2 27.97, in 20,491 s (KT shared with the DS+rQ8
+  run all along). Level with the DS+DS pair's mean (26.7, pass@1 20.0) and below DS+rQ8 seed 1 (29, pass@1 22).
+  Kotlin 4/4, Python 16/16, bash 7/9: both failures are bash, `sh_e_ext_count` and `sh_retry` (DS+rQ8 s1 solved both;
+  `sh_retry` also failed Q6+rDS s1). Second-attempt fixes: `kt_fix_money`, `py_e_duration`, `py_expr_eval`,
+  `py_semver_range`, `py_shell_split`, `sh_csv_col`, `sh_env_export`. No "no fenced code block" fault. Slowest
+  DeepSeek seed so far: bash review rounds alone took 9.3k s.
+- DeepSeek (KT) + Qwen3.8 review, seed 2: 27 of 29, pass@1 20, tests@2 28.78, in 12,900 s (seed 1: 29). Mean of 2
+  seeds **28.0 pass@2**, 21.0 pass@1: above every n=3 setup (DS+DS pair 26.7 / 20.0) and DeepSeek alone (24.7 / 19.0).
+  Kotlin 4/4 (all first try), Python 15/16, bash 8/9. Failed `py_ini_interp` and `sh_retry` (`sh_retry` also failed
+  DS+rDS s1). Second-attempt fixes: `py_apply_patch`, `py_e_duration`, `py_expr_eval`, `py_semver_range`,
+  `sh_access_log`, `sh_env_export`, `sh_wordfreq`. No "no fenced code block" fault.
+- DeepSeek (KT) + DeepSeek review, seed 2: 28 of 29, pass@1 21, tests@2 28.70, in 13,254 s (seed 1: 27). Mean of 2
+  seeds **27.5 pass@2**, 20.5 pass@1, just under DS+rQ8 (28.0 / 21.0) and above the DS+DS pair (26.7 / 20.0). Kotlin
+  4/4, Python 16/16 (Python 32/32 over both seeds), bash 8/9; only `sh_rotate` failed (solved in seed 1), `sh_retry`
+  passed first try this time. Second-attempt fixes: `kt_fix_money`, `py_e_duration`, `py_e_fix_paginate`,
+  `py_e_flatten`, `py_semver_range`, `sh_e_lowercase`, `sh_wordfreq`. No "no fenced code block" fault.
+- DeepSeek (KT) + Qwen3.8 review, seed 3: 26 of 29, pass@1 18, tests@2 28.39, in 17,712 s (seeds 1, 2: 29, 27). Mean of
+  3 seeds **27.3 pass@2**, 20.0 pass@1: the best n=3 setup, +0.6 over the DS+DS pair (26.7 / 20.0) at the same
+  pass@1, +2.6 over DeepSeek alone (24.7 / 19.0). The 29 on seed 1 was a high draw, as for the DS+DS pair. Kotlin 4/4,
+  Python 15/16, bash 7/9. Failed `py_expr_eval`, `sh_access_log`, `sh_csv_col`; nothing failed in all 3 seeds
+  (`sh_retry` 2 of 3 solved). No "no fenced code block" fault. Slot A moved on to tdd DS+DS s2 at 08:08.
+- DeepSeek (KT) + DeepSeek review, seed 3: 26 of 29, pass@1 22, tests@2 28.34, in 13,978 s (seeds 1, 2: 27, 28). Mean
+  of 3 seeds **27.0 pass@2**, 21.0 pass@1: between DS+rQ8 (27.3 / 20.0) and the DS+DS pair (26.7 / 20.0), the highest
+  n=3 pass@1. Kotlin 4/4, Python 15/16, bash 7/9. Failed `py_expr_eval`, `sh_env_export`, `sh_rotate` (`sh_rotate`
+  also seed 2). No "no fenced code block" fault. With both reviewer setups at n=3, the four best DeepSeek setups
+  (rQ8, rDS, DS+DS pair, Q8>DS pair) sit within 0.6 pass@2 of each other, all +2.0 to +2.6 over DeepSeek alone: any
+  second look helps, who looks and in what form barely matters. Slot B moved on to tdd nav Qwen3.8 + driver DS s1 at
+  08:38.
