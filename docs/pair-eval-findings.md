@@ -1,11 +1,6 @@
 # Pair programming eval: findings per run
 
-Copy of `LLM_ROOT/results/pair-eval/pair-findings.md` as of 2026-11-24 15:10; the live file there may be newer (tests-first
-and remeasure runs still running). Here `pair-winners.md`, `pair-report.md`, `pair-findings.md` are
-[pair-eval-winners.md](pair-eval-winners.md), [pair-eval-report.md](pair-eval-report.md),
-[pair-eval-findings.md](pair-eval-findings.md).
-
-Files: `pair-winners.md` (winners + headline, short), `pair-report.md` (setup, generated tables, literature, gaps), `pair-findings.md` (per-run findings).
+Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short), [pair-eval-report.md](pair-eval-report.md) (setup, generated tables, literature, gaps), [pair-eval-findings.md](pair-eval-findings.md) (per-run findings).
 
 - Pairing lifts Qwen3.8 by ~3–4 tasks at pass@2 (21 vs 18 on seed 1; 16.7 mean alone), the same as a reviewer alone
   (21–22). The plan step adds nothing measurable on top of the review in this one seed.

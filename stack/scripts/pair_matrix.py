@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Tables of llm/results/pair-eval/pair-report.md from the solo/review runs (burnish) and the pair runs.
+"""Tables of docs/pair-eval-report.md from the solo/review runs (burnish) and the pair runs.
 
 pair_matrix.py            print the generated tables
-pair_matrix.py --write    replace the first table under each generated heading in pair-report.md
+pair_matrix.py --write    replace the first table under each generated heading in docs/pair-eval-report.md
 """
 import glob
 import json
@@ -16,7 +16,7 @@ BURNISH = os.path.expanduser("~/burnish/eval/coding/results")
 GLOBAL_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "global.env")
 LLM_ROOT = next(line.split("=", 1)[1].strip().strip("'\"") for line in open(GLOBAL_ENV) if line.startswith("LLM_ROOT="))
 PAIR = os.path.join(LLM_ROOT, "results", "pair-eval")
-REPORT = os.path.join(PAIR, "pair-report.md")
+REPORT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "pair-eval-report.md")
 
 MODELS = {  # pair label name -> (matrix id, long name, short name)
     "deepseek": ("dsl", "DeepSeek (llama.cpp)", "DSl"),

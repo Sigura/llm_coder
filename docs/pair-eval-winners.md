@@ -1,18 +1,13 @@
 # Pair programming eval: winners and headline
 
-Copy of `LLM_ROOT/results/pair-eval/pair-winners.md` as of 2026-11-24 15:10; the live file there may be newer (tests-first
-and remeasure runs still running). Here `pair-winners.md`, `pair-report.md`, `pair-findings.md` are
-[pair-eval-winners.md](pair-eval-winners.md), [pair-eval-report.md](pair-eval-report.md),
-[pair-eval-findings.md](pair-eval-findings.md).
-
-Files: `pair-winners.md` (winners + headline, short), `pair-report.md` (setup, generated tables, literature, gaps), `pair-findings.md` (per-run findings).
+Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short), [pair-eval-report.md](pair-eval-report.md) (setup, generated tables, literature, gaps), [pair-eval-findings.md](pair-eval-findings.md) (per-run findings).
 
 ## Winners (hand-written, refreshed on each finished seed; state 2026-11-24 15:00)
 
 score = (0.3 pass@1 + 0.7 pass@2) / 29, 0–1, the sort key (ties by pass@2): pass@2 = solved within two attempts (the
 second sees the first one's test failures), pass@1 = solved on the first; pass@2 weighs more since it is what the
 setup solves at all, pass@1 rewards needing no retry. 0.01 of score ≈ 1 task of pass@1, 0.024 ≈ 1 task of pass@2; gaps
-under ~0.02 are seed noise (details: pair-report.md, Headline). pass@2 of 29 is the mean when a setup has 2+ complete
+under ~0.02 are seed noise (details: [pair-eval-report.md](pair-eval-report.md), Headline). pass@2 of 29 is the mean when a setup has 2+ complete
 seeds, otherwise its single seed (n = complete seeds). Solved/h = pass@2 per hour of eval wall time; DeepSeek runs
 shared KT's two slots with another run most of the time, so their times (and solved/h) are pessimistic and noisy. tg =
 single-stream decode of the writer, tok/s. Init = server launch to ready, cold after a reboot, measured on the Nov 22

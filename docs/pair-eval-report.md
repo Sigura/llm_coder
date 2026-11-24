@@ -1,10 +1,5 @@
 # Pair programming (navigator + driver) vs solo and review setups (2026-11-21)
 
-Copy of `LLM_ROOT/results/pair-eval/pair-report.md` as of 2026-11-24 15:10; the live file there may be newer (tests-first
-and remeasure runs still running). Here `pair-winners.md`, `pair-report.md`, `pair-findings.md` are
-[pair-eval-winners.md](pair-eval-winners.md), [pair-eval-report.md](pair-eval-report.md),
-[pair-eval-findings.md](pair-eval-findings.md).
-
 Eval: burnish's coding tasks, 29 tasks (16 Python, 9 bash, 4 Kotlin), 2 attempts, recommended sampling; the same
 tests and scoring as the solo runs (`stack/scripts/eval_pair.py`). pass@1 / pass@2 = tasks solved on the first /
 either attempt; tests@2 = test fraction summed over tasks.
@@ -13,7 +8,7 @@ Pair flow per task: (1) navigator writes a plan and 3–6 checks, (2) driver wri
 the driver revises once unless the review says OK, (4) the tests run; on failure the navigator turns the output into a fix
 instruction for attempt 2. "Review" setups: the writer works alone, the reviewer only reviews (no plan).
 
-Files: `pair-winners.md` (winners + headline, short), `pair-report.md` (setup, generated tables, literature, gaps), `pair-findings.md` (per-run findings).
+Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short), [pair-eval-report.md](pair-eval-report.md) (setup, generated tables, literature, gaps), [pair-eval-findings.md](pair-eval-findings.md) (per-run findings).
 
 ## What was tested
 
@@ -31,12 +26,12 @@ Files: `pair-winners.md` (winners + headline, short), `pair-report.md` (setup, g
 | PAIR (llama.cpp) | Qwen3.8 | DeepSeek (llama.cpp) plans + reviews | 1, 2 (partial, 15/29) |
 | nav DeepSeek (KT) + driver DeepSeek (KT) | DeepSeek (KT) | DeepSeek (KT) plans + reviews | 1, 2, 3 |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | DeepSeek (KT) | DeepSeek (KT) plans + reviews | 1, 2, 3 |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | DeepSeek (KT) | DeepSeek (KT) plans + reviews | 1, 2, 3 (partial, 3/29) |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | DeepSeek (KT) | DeepSeek (KT) plans + reviews | 1, 2, 3 (partial, 5/29) |
 | PAIR-KT | Qwen3.8 | DeepSeek (KT) plans + reviews | 1, 2, 3 (partial, 8/29) |
 | DS>Q8 tdd | Qwen3.8 | DeepSeek (KT) plans + reviews | 1 |
 | nav DeepSeek (KT) + driver Qwen3.6 MTP | Qwen3.6 MTP | DeepSeek (KT) plans + reviews | 1 |
 | nav Qwen3.8 + driver DeepSeek (KT) | DeepSeek (KT) | Qwen3.8 plans + reviews | 1, 2, 3 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | DeepSeek (KT) | Qwen3.8 plans + reviews | 1 (partial, 16/29) |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | DeepSeek (KT) | Qwen3.8 plans + reviews | 1 (partial, 18/29) |
 | nav Qwen3.8 + driver Qwen3.8 | Qwen3.8 | Qwen3.8 plans + reviews | 1, 2, 3 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | Qwen3.8 | Qwen3.8 plans + reviews | 1, 2, 3 |
 | nav Qwen3.8 + driver Qwen3.6 MTP | Qwen3.6 MTP | Qwen3.8 plans + reviews | 1 |
@@ -64,7 +59,7 @@ by pass@2.
 | nav DeepSeek (KT) + driver DeepSeek (KT) | 0.85 | 26, 29, 25 | 26.7 | 20.0 | 13,362–19,648 s |
 | nav Qwen3.8 + driver DeepSeek (KT) | 0.85 | 26, 28, 26 | 26.7 | 19.7 | 11,335–22,266 s |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.84 | 27, 27, 26 | 26.7 | 19.3 | 14,162–25,062 s |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.84 | 24, 26, seed 3: 3 of the first 3 | 25.0 | 23.0 | 28,028–34,307 s |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.84 | 24, 26, seed 3: 5 of the first 5 | 25.0 | 23.0 | 28,028–34,307 s |
 | DeepSeek alone | 0.79 | 28 (pieced together), 23, 23 | 24.7 | 19.0 | 7,536–10,754 s |
 | nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.76 | 26, 23, 22 | 23.7 | 18.7 | 9,774–15,162 s |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.72 | 22, 20, 25 | 22.3 | 17.3 | 10,692–14,201 s |
@@ -82,7 +77,7 @@ by pass@2.
 | nav Qwen3.8 + driver Qwen3.6 MTP | 0.40 | 13 | 13 | 8 | 3,000 s |
 | Qwen3.6 MTP alone | 0.31 | 12, 8, 9 | 9.7 | 7.0 | 812–914 s |
 | nav Qwen3.6 MTP + driver Qwen3.6 MTP | 0.26 | 9 | 9 | 4 | 2,704 s |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | — | seed 1: 14 of the first 16 | — | — | — |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | — | seed 1: 15 of the first 18 | — | — | — |
 
 ## Summary per run
 
@@ -123,7 +118,7 @@ by pass@2.
 | nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 3 | 29 | 18 | 26 | 28.25 | 18465 | 123121 | 26324 / 96797 |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 1 | 29 | 22 | 24 | 28.031 | 34307 | 240306 | 57445 / 182861 |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 2 | 29 | 24 | 26 | 28.0 | 28028 | 241745 | 56627 / 185118 |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 3 (partial) | 3 | 3 | 3 | — | 1747 | — | — |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 3 (partial) | 5 | 4 | 5 | — | 5086 | — | — |
 | nav DeepSeek (KT) + driver Qwen3.8 | 1 | 29 | 13 | 20 | 24.735 | 7819 | 146873 | 27700 / 119173 |
 | nav DeepSeek (KT) + driver Qwen3.8 | 2 | 29 | 14 | 23 | 27.263 | 13198 | 164487 | 28460 / 136027 |
 | nav DeepSeek (KT) + driver Qwen3.8 | 3 (partial) | 8 | 5 | 6 | — | 1981 | — | — |
@@ -132,7 +127,7 @@ by pass@2.
 | nav Qwen3.8 + driver DeepSeek (KT) | 1 | 29 | 18 | 26 | 27.827 | 12255 | 123948 | 22946 / 101002 |
 | nav Qwen3.8 + driver DeepSeek (KT) | 2 | 29 | 21 | 28 | 28.8 | 11335 | 180588 | 24735 / 155853 |
 | nav Qwen3.8 + driver DeepSeek (KT) | 3 | 29 | 20 | 26 | 27.982 | 22266 | 153453 | 25243 / 128210 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 1 (partial) | 16 | 12 | 14 | — | 14553 | — | — |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 1 (partial) | 18 | 12 | 15 | — | 21521 | — | — |
 | nav Qwen3.8 + driver Qwen3.8 | 1 | 29 | 10 | 16 | 24.185 | 6698 | 200206 | 31049 / 169157 |
 | nav Qwen3.8 + driver Qwen3.8 | 2 | 29 | 13 | 22 | 25.841 | 6010 | 177599 | 30147 / 147452 |
 | nav Qwen3.8 + driver Qwen3.8 | 3 | 29 | 13 | 19 | 23.78 | 5962 | 177930 | 24696 / 153234 |
@@ -152,7 +147,7 @@ by pass@2.
 
 Solo columns: seeds solved at pass@2 (DeepSeek: seeds 2,3; its seed 1 lost 23 tasks to a host reset). Other columns, seed 1: 2 = solved on attempt 1, 1 = on attempt 2, 0 = failed.
 
-| task | lang | DS solo | Q8 solo | Q6 solo | Q8+rDS | Q8+rQ6 | Q6+rQ8 | DS+rQ8 | DS+rDS | Q6+rDS | PAIR | DS>DS | DS>DS keep | DS>DS tdd | PAIR-KT | DS>Q8 tdd | DS>Q6 | Q8>DS | Q8>DS tdd (16/29) | Q8>Q8 | Q8>Q8 tdd | Q8>Q6 | Q6>DS | Q6>Q8 | Q6>Q6 |
+| task | lang | DS solo | Q8 solo | Q6 solo | Q8+rDS | Q8+rQ6 | Q6+rQ8 | DS+rQ8 | DS+rDS | Q6+rDS | PAIR | DS>DS | DS>DS keep | DS>DS tdd | PAIR-KT | DS>Q8 tdd | DS>Q6 | Q8>DS | Q8>DS tdd (18/29) | Q8>Q8 | Q8>Q8 tdd | Q8>Q6 | Q6>DS | Q6>Q8 | Q6>Q6 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | sh_access_log | bash | 2/2 | 0/3 | 1/3 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 0 | 0 | 2 | 0 | 2 | 0 | 0 | · | 0 | 1 | 1 | 2 | 0 | 0 |
 | sh_csv_col | bash | 1/2 | 1/3 | 0/3 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 1 | 1 | 1 | 0 | 0 | 2 | 1 | · | 0 | 0 | 0 | 2 | 0 | 0 |
@@ -179,8 +174,8 @@ Solo columns: seeds solved at pass@2 (DeepSeek: seeds 2,3; its seed 1 lost 23 ta
 | py_fix_lru | python | 2/2 | 3/3 | 1/3 | 2 | 2 | 0 | 2 | 2 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 1 |
 | py_fix_merge_intervals | python | 2/2 | 2/3 | 0/3 | 1 | 0 | 0 | 2 | 2 | 0 | 0 | 2 | 2 | 2 | 0 | 2 | 0 | 2 | 2 | 1 | 1 | 0 | 2 | 1 | 0 |
 | py_grid_route | python | 2/2 | 1/3 | 1/3 | 1 | 0 | 1 | 2 | 2 | 2 | 1 | 2 | 2 | 2 | 0 | 0 | 1 | 2 | 1 | 2 | 2 | 2 | 2 | 2 | 1 |
-| py_ini_interp | python | 1/2 | 3/3 | 0/3 | 2 | 2 | 1 | 1 | 2 | 2 | 0 | 2 | 2 | 0 | 0 | 0 | 0 | 2 | · | 1 | 2 | 0 | 0 | 1 | 0 |
-| py_semver_range | python | 2/2 | 1/3 | 0/3 | 0 | 1 | 0 | 2 | 1 | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 2 | · | 1 | 0 | 0 | 2 | 0 | 0 |
+| py_ini_interp | python | 1/2 | 3/3 | 0/3 | 2 | 2 | 1 | 1 | 2 | 2 | 0 | 2 | 2 | 0 | 0 | 0 | 0 | 2 | 0 | 1 | 2 | 0 | 0 | 1 | 0 |
+| py_semver_range | python | 2/2 | 1/3 | 0/3 | 0 | 1 | 0 | 2 | 1 | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 2 | 1 | 1 | 0 | 0 | 2 | 0 | 0 |
 | py_shell_split | python | 2/2 | 0/3 | 0/3 | 1 | 1 | 0 | 2 | 1 | 0 | 0 | 2 | 2 | 0 | 1 | 0 | 0 | 2 | · | 0 | 2 | 0 | 1 | 1 | 0 |
 | py_typed_load | python | 1/2 | 2/3 | 0/3 | 2 | 2 | 1 | 1 | 2 | 1 | 2 | 1 | 1 | 2 | 2 | 1 | 1 | 2 | · | 2 | 2 | 2 | 1 | 0 | 0 |
 
@@ -194,9 +189,9 @@ columns count attempts that produced a file.
 |---|---|---|---|---|---|---|---|---|
 | nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 1 | 29 | 8/29 | 8/36 | 15/36 | 52 | 8/8 | 16/21 |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 2 | 29 | 6/29 | 5/34 | 9/34 | 55 | 6/6 | 20/23 |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 3 (partial, 3/29) | 3 | 0/3 | 0/3 | 0/3 | 6 | 0/0 | 3/3 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 3 (partial, 5/29) | 5 | 0/5 | 0/6 | 0/6 | 12 | 0/0 | 5/5 |
 | nav DeepSeek (KT) + driver Qwen3.8 (tdd) | 1 | 29 | 10/29 | 11/38 | 14/38 | 52 | 10/10 | 10/19 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 1 (partial, 16/29) | 16 | 5/16 | 7/20 | 8/20 | 26 | 4/5 | 10/11 |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 1 (partial, 18/29) | 18 | 5/18 | 7/24 | 10/24 | 32 | 4/5 | 11/13 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 1 | 29 | 12/29 | 9/43 | 16/43 | 62 | 9/12 | 13/17 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 2 | 29 | 6/29 | 8/41 | 9/41 | 65 | 6/6 | 14/23 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 3 | 29 | 7/29 | 6/36 | 9/36 | 57 | 7/7 | 18/22 |
