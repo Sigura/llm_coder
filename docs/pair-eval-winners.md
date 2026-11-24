@@ -81,7 +81,7 @@ Readout:
 | nav DeepSeek (KT) + driver DeepSeek (KT) | 0.85 | 26, 29, 25 | 26.7 | 20.0 | 13,362–19,648 s |
 | nav Qwen3.8 + driver DeepSeek (KT) | 0.85 | 26, 28, 26 | 26.7 | 19.7 | 11,335–22,266 s |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.84 | 27, 27, 26 | 26.7 | 19.3 | 14,162–25,062 s |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.84 | 24, 26, seed 3: 3 of the first 3 | 25.0 | 23.0 | 28,028–34,307 s |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.84 | 24, 26, seed 3: 5 of the first 5 | 25.0 | 23.0 | 28,028–34,307 s |
 | DeepSeek alone | 0.79 | 28 (pieced together), 23, 23 | 24.7 | 19.0 | 7,536–10,754 s |
 | nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.76 | 26, 23, 22 | 23.7 | 18.7 | 9,774–15,162 s |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.72 | 22, 20, 25 | 22.3 | 17.3 | 10,692–14,201 s |
@@ -99,4 +99,4 @@ Readout:
 | nav Qwen3.8 + driver Qwen3.6 MTP | 0.40 | 13 | 13 | 8 | 3,000 s |
 | Qwen3.6 MTP alone | 0.31 | 12, 8, 9 | 9.7 | 7.0 | 812–914 s |
 | nav Qwen3.6 MTP + driver Qwen3.6 MTP | 0.26 | 9 | 9 | 4 | 2,704 s |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | — | seed 1: 14 of the first 16 | — | — | — |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | — | seed 1: 15 of the first 18 | — | — | — |
