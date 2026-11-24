@@ -31,7 +31,7 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
 | DS>Q8 tdd | Qwen3.8 | DeepSeek (KT) plans + reviews | 1 |
 | nav DeepSeek (KT) + driver Qwen3.6 MTP | Qwen3.6 MTP | DeepSeek (KT) plans + reviews | 1 |
 | nav Qwen3.8 + driver DeepSeek (KT) | DeepSeek (KT) | Qwen3.8 plans + reviews | 1, 2, 3 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | DeepSeek (KT) | Qwen3.8 plans + reviews | 1, 2 (partial, 1/29) |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | DeepSeek (KT) | Qwen3.8 plans + reviews | 1, 2 (partial, 4/29) |
 | nav Qwen3.8 + driver Qwen3.8 | Qwen3.8 | Qwen3.8 plans + reviews | 1, 2, 3 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | Qwen3.8 | Qwen3.8 plans + reviews | 1, 2, 3 |
 | nav Qwen3.8 + driver Qwen3.6 MTP | Qwen3.6 MTP | Qwen3.8 plans + reviews | 1 |
@@ -61,7 +61,7 @@ by pass@2.
 | nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.84 | 27, 27, 26 | 26.7 | 19.3 | 14,162–25,062 s |
 | nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.84 | 24, 26, seed 3: 19 of the first 21 | 25.0 | 23.0 | 28,028–34,307 s |
 | DeepSeek alone | 0.79 | 28 (pieced together), 23, 23 | 24.7 | 19.0 | 7,536–10,754 s |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.78 | 24, seed 2: 1 of the first 1 | 24 | 19 | 37,269 s |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.78 | 24, seed 2: 4 of the first 4 | 24 | 19 | 37,269 s |
 | nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.76 | 26, 23, 22 | 23.7 | 18.7 | 9,774–15,162 s |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.72 | 22, 20, 25 | 22.3 | 17.3 | 10,692–14,201 s |
 | Q8+rDS | 0.67 | 22, 22, 22 | 22.0 | 13.7 | 7,360–11,792 s |
@@ -128,7 +128,7 @@ by pass@2.
 | nav Qwen3.8 + driver DeepSeek (KT) | 2 | 29 | 21 | 28 | 28.8 | 11335 | 180588 | 24735 / 155853 |
 | nav Qwen3.8 + driver DeepSeek (KT) | 3 | 29 | 20 | 26 | 27.982 | 22266 | 153453 | 25243 / 128210 |
 | nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 1 | 29 | 19 | 24 | 27.847 | 37269 | 348162 | 64852 / 283310 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 2 (partial) | 1 | 1 | 1 | — | 664 | — | — |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 2 (partial) | 4 | 4 | 4 | — | 2263 | — | — |
 | nav Qwen3.8 + driver Qwen3.8 | 1 | 29 | 10 | 16 | 24.185 | 6698 | 200206 | 31049 / 169157 |
 | nav Qwen3.8 + driver Qwen3.8 | 2 | 29 | 13 | 22 | 25.841 | 6010 | 177599 | 30147 / 147452 |
 | nav Qwen3.8 + driver Qwen3.8 | 3 | 29 | 13 | 19 | 23.78 | 5962 | 177930 | 24696 / 153234 |
@@ -193,7 +193,7 @@ columns count attempts that produced a file.
 | nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 3 (partial, 21/29) | 21 | 5/21 | 6/26 | 8/26 | 38 | 5/5 | 14/16 |
 | nav DeepSeek (KT) + driver Qwen3.8 (tdd) | 1 | 29 | 10/29 | 11/38 | 14/38 | 52 | 10/10 | 10/19 |
 | nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 1 | 29 | 6/29 | 8/39 | 12/39 | 59 | 5/6 | 19/23 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 2 (partial, 1/29) | 1 | 0/1 | 0/1 | 0/1 | 2 | 0/0 | 1/1 |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 2 (partial, 4/29) | 4 | 0/4 | 0/4 | 0/4 | 8 | 0/0 | 4/4 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 1 | 29 | 12/29 | 9/43 | 16/43 | 62 | 9/12 | 13/17 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 2 | 29 | 6/29 | 8/41 | 9/41 | 65 | 6/6 | 14/23 |
 | nav Qwen3.8 + driver Qwen3.8 (tdd) | 3 | 29 | 7/29 | 6/36 | 9/36 | 57 | 7/7 | 18/22 |
