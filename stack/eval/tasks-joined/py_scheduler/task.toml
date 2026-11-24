@@ -1,0 +1,61 @@
+lang = "python"
+file = "solution.py"
+prompt = """
+Write one Python module that implements a small job scheduler. It consists of four parts; implement all of them
+in the same file. The functions of parts 1-3 are tested on their own too, so keep their exact names and
+signatures.
+
+## Part 1
+
+Implement `next_fire(expr: str, after: datetime.datetime) -> datetime.datetime` for standard 5-field cron
+expressions: `minute hour day-of-month month day-of-week`.
+
+Field rules:
+- minute 0-59, hour 0-23, day-of-month 1-31, month 1-12, day-of-week 0-7 (0 and 7 are both Sunday).
+- Each field is a comma-separated list of items. An item is `*`, a number `N`, a range `A-B`, or any of those
+  followed by `/S` (step). `*/S` steps over the whole field range; `A/S` means from A to the field maximum.
+- Month names `JAN`..`DEC` and day names `SUN`..`SAT` are accepted case-insensitively, also inside ranges.
+- Day matching follows Vixie cron: if both day-of-month and day-of-week are restricted (neither field is
+  exactly `*`), a day matches when EITHER matches. Otherwise both must match (a `*` always matches).
+- Return the earliest datetime strictly after `after` (seconds and microseconds of the result are 0) that matches.
+  `after` is naive. Never return `after` itself even if it matches exactly on a whole minute.
+- Raise `ValueError` for a wrong field count, out-of-range values, a range with A > B, a zero step, or unknown
+  names. If no time matches within the next 5 years (e.g. `0 0 30 2 *`), raise `ValueError`.
+
+## Part 2
+
+Implement two functions for human-readable durations.
+
+`parse_duration(s: str) -> int` returns seconds. Input is one or more `<integer><unit>` parts with units `d`, `h`, `m`,
+`s` (in that order, each at most once, case-insensitive), optionally separated by single spaces, e.g. `1h30m`,
+`2d 4h`, `90s`, `0s`. Values may exceed the next unit (`90m` is valid). Raise `ValueError` for empty input, unknown
+units, wrong order, repeated units, missing numbers, or other characters.
+
+`format_duration(seconds: int) -> str` is the inverse in canonical form: largest units first, zero parts omitted, no
+spaces, e.g. `5400` -> `1h30m`, `0` -> `0s`, `86461` -> `1d1m1s`. Negative input raises `ValueError`.
+
+## Part 3
+
+Implement `merge(base: dict, *overrides: dict) -> dict`, a deep merge for configuration layers (later wins).
+
+- Dicts are merged recursively. Any other value in an override replaces the base value (lists are replaced, not
+  concatenated).
+- A key whose override value is `None` deletes that key from the result.
+- A key ending in `+` appends: `{"plugins+": ["x"]}` appends the items to the base list `plugins` (missing base ->
+  new list). If the base value exists and is not a list, raise `TypeError`. The `+` key itself never appears in
+  the result.
+- Inputs must not be mutated, and the result must not share mutable dicts/lists with the inputs (a deep copy).
+
+## Part 4: `plan_runs`
+
+Implement `plan_runs(after: datetime.datetime, horizon: str, base: dict, *overrides: dict) -> list[str]` using the
+functions above.
+
+- The configuration is `merge(base, *overrides)`. Its key `jobs` (missing -> no jobs) maps job names to dicts with:
+  `cron` (required cron expression), `timeout` (duration string, default `"1h"`), `enabled` (bool, default `True`).
+  A job entry that is not a dict, a missing `cron`, or an `enabled` that is not a bool raises `ValueError`.
+- `horizon` is a duration string (`parse_duration`). Return every fire time `t` of every enabled job with
+  `after < t <= after + horizon`, as strings `"YYYY-MM-DD HH:MM <name> <timeout>"`, where `<timeout>` is the job's
+  timeout in canonical form (`format_duration(parse_duration(timeout))`, so `"90m"` becomes `"1h30m"`).
+- Sort by time, then by job name. Invalid cron expressions or durations raise `ValueError` (also for disabled jobs).
+"""

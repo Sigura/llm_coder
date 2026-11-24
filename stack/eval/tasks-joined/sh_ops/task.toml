@@ -1,0 +1,79 @@
+lang = "bash"
+file = "solution.sh"
+prompt = """
+Write one bash script `solution.sh SUBCOMMAND ARGS...` with four subcommands. Parts 1-3 describe a script
+`solution.sh ...`: implement each as the subcommand named in its heading, called as `solution.sh <subcommand>
+ARGS...` with exactly the behaviour, output and exit codes described for the whole script. An unknown or missing
+subcommand prints a usage message to stderr and exits 2.
+
+## Part 1: subcommand `dotenv`
+
+Write `solution.sh FILE` that converts a dotenv file into shell code that is safe to `eval` in bash.
+
+Input rules, per line:
+- Blank lines and lines whose first non-blank character is `#` are skipped.
+- An optional leading `export ` is allowed. Then `KEY=VALUE`, KEY matching `[A-Za-z_][A-Za-z0-9_]*`, no
+  spaces around `=`.
+- VALUE unquoted: taken literally up to an unquoted ` #` (space then hash starts a comment); trailing spaces and tabs
+  are trimmed. `a#b` keeps the hash.
+- VALUE in single quotes: literal content between the quotes; anything after the closing quote must be empty or a
+  comment.
+- VALUE in double quotes: `\\n` becomes a newline, `\\"` a quote, `\\\\` a backslash, other escapes stay as
+  is; no variable expansion. Anything after the closing quote must be empty or a comment.
+- Any other line is invalid.
+
+Output: one line per variable, in input order, `export KEY=<value>` where the value is quoted with single quotes
+(a single quote inside becomes `'\\''`). If a key repeats, the later value wins but keeps its LATER position (print
+it once, at its last occurrence). On the first invalid line print `FILE:LINENO: invalid line` to stderr and exit 1
+with no stdout at all.
+
+## Part 2: subcommand `retry`
+
+Write `solution.sh [-n ATTEMPTS] [-d DELAY] [-b FACTOR] [-r CODES] -- COMMAND [ARGS...]`, a retry wrapper.
+
+- Runs COMMAND with its arguments exactly as given (spaces, globs, empty arguments preserved; no eval).
+- Retries while COMMAND exits non-zero, up to ATTEMPTS total runs (default 3). Exit with COMMAND's last exit
+  code; exit 0 as soon as it succeeds.
+- `-d DELAY` seconds before the first retry (default 1, may be fractional like 0.2), multiplied by FACTOR after each
+  retry (`-b`, default 2, may be fractional). Use `sleep`.
+- `-r CODES`: comma-separated exit codes that are retryable; any other non-zero code stops immediately. Default:
+  every non-zero code is retryable.
+- Before each retry print to stderr exactly: `retry: attempt K/N failed with exit code C, sleeping S s` where K is
+  the attempt that just failed (1-based), N is ATTEMPTS, and S is the delay formatted with `%g` semantics (e.g.
+  `0.2`, `1`, `0.4`). Print nothing on the last failed attempt.
+- COMMAND's own stdout/stderr pass through unchanged. stdin is passed to the first run only (later runs get
+  /dev/null). Missing `--` or COMMAND, or invalid option values: usage to stderr, exit 64.
+
+## Part 3: subcommand `rotate`
+
+Write `solution.sh [-n] [-k KEEP] DIR PREFIX`, a backup pruner.
+
+Backups in DIR (not recursive) are regular files named `PREFIX-YYYYmmdd-HHMMSS.tar.gz` (exactly that pattern;
+other files, directories and symlinks are never touched). Their age is taken from the timestamp in the NAME, not
+the mtime. Keep:
+- the KEEP newest backups (default 7), and
+- additionally, the newest backup of each of the last 4 calendar months that have backups (by name timestamp),
+  even if older than the KEEP newest.
+Delete every other matching backup. Print one line per deleted file, `delete NAME` (basename), oldest first.
+`-n` is a dry run: print the same lines but delete nothing. PREFIX may contain regex/glob special characters
+(e.g. `db.main+1`) and must match literally. File names may contain no spaces but DIR may.
+Errors (missing DIR, missing args, KEEP not a non-negative integer): message to stderr, exit 2.
+
+## Part 4: subcommand `backup`
+
+`solution.sh backup ENVFILE -- COMMAND [ARGS...]` runs a backup command with settings from a dotenv file, then prunes
+old backups, using the parts above.
+
+- ENVFILE is converted with the rules of part 1; on an invalid file behave exactly like `dotenv` (its stderr line,
+  exit 1, no stdout). Every variable from ENVFILE is exported to COMMAND's environment.
+- Settings from ENVFILE: `BACKUP_DIR` and `BACKUP_PREFIX` (both required and non-empty, else a message to stderr and
+  exit 2), `RETRIES` (default 3), `RETRY_DELAY` (default 1), `KEEP` (default 7).
+- COMMAND runs like `retry -n RETRIES -d RETRY_DELAY -- COMMAND [ARGS...]` (part 2, default factor; same stderr
+  lines, same exit codes, including 64 for invalid RETRIES or RETRY_DELAY). If it finally fails, exit with its exit
+  code and do not prune.
+- After success, prune like `rotate -k KEEP BACKUP_DIR BACKUP_PREFIX` (part 3, not a dry run) and print its output
+  after COMMAND's output; exit with its exit code.
+- Missing `--` or COMMAND: usage to stderr, exit 2.
+
+Environment: GNU bash 5.2, GNU coreutils, GNU sed/grep/find, and `awk` is mawk (POSIX awk: do not rely on gawk-only features such as `asort`, `PROCINFO`, `gensub`, `strftime`). No Python, Perl or jq.
+"""
