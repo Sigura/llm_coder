@@ -265,3 +265,13 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   at about 2x their time per seed (28–34k s vs 13–20k s). The navigator's tests make the first attempt right more often
   and leave less for the second. Kotlin 4/4, Python 14/16, bash 8/9. Failed `py_e_duration`, `py_semver_range` (57 min,
   both attempts), `sh_rotate`; `py_semver_range` also failed seed 1. No "no fenced code block" fault. s3 started 14:14.
+- nav Qwen3.8 + driver DeepSeek (KT), tests first, seed 1: 24 of 29, pass@1 19, tests@2 27.85, in 37,269 s (crashed
+  12:03 on a 1 h request timeout, resumed from 15 tasks done). Plain Q8>DS seed 1: 26 / 18 (mean 26.7 / 19.7), so tests
+  first costs 2.7 pass@2 here and adds nothing to pass@1, at 2–3x the time (37k s vs 11–22k s) and 2.3x the tokens
+  (348k vs ~150k). Score 0.78 vs 0.85 plain. Qwen3.8's tests are mostly wrong: only 6 of 29 test files pass the
+  reference (DeepSeek's: 8 and 6). When the tests were valid, 5 of 6 tasks were solved; when they were wrong, 19 of 23.
+  DeepSeek then spends 59 fix turns chasing them. It lost tasks the plain pair solves: `py_ini_interp`, `py_e_flatten`,
+  `py_e_logstats`, `sh_rotate`, `sh_csv_col`; it gained `sh_access_log`, `sh_e_replace`, `sh_env_export`. Kotlin 4/4,
+  Python 13/16, bash 7/9. No attempt capped, no "no fenced code block" fault. Slow tasks: `py_grid_route` (one
+  ~31k-token driver reply hit the 1 h timeout), `sh_env_export` 71 min. s2 started 20:27, the first seed with streamed
+  requests (eval_pair.py 5592cc1).
