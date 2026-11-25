@@ -22,7 +22,8 @@ Replays, not full seeds: each check runs on fixed inputs, so a gain shows up in 
   stored DeepSeek drafts (DeepSeek alone, seeds 1-3), labelled by the current tests: 39 fail, 39 pass. A flag (any
   verdict but OK) on failing code is a catch, on passing code a false alarm. The navigator first writes its plan, as in
   the pair eval. Thinking runs take 5-35 min per draft, so they use a fixed random subset of 10 failing + 10 passing
-  drafts; the no-thinking numbers are shown on the same 20 and on all 78.
+  drafts; the no-thinking numbers are shown on the same 20 and on all 78. Empty verdicts (thinking ran out of tokens)
+  are counted apart, not as flags; in the eval an empty verdict is not OK, so it acts like a flag (the driver revises).
 - tdd (nav Qwen3.8 + driver DS, #3): only the navigator's plan and test-writing turns (`eval_pair.py --tests-only`) on
   all 29 tasks; score = test files that pass the task's reference solution.
 """
@@ -85,7 +86,8 @@ def check_rows(results: Path, kind: str, keys: set) -> list[str]:
             secs = sum(r["seconds"] for r in sel) / len(sel) if sel else 0
             toks = sum(r.get("tokens", 0) for r in sel) / len(sel) if sel and kind == "nav" else None
             rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | {name}: {len(sel)} done ({state}) | "
-                        f"{sum(r['flagged'] for r in fail)}/{len(fail)} | {sum(r['flagged'] for r in ok)}/{len(ok)} | "
+                        f"{sum(r['flagged'] and bool(r['verdict']) for r in fail)}/{len(fail)} | "
+                        f"{sum(r['flagged'] and bool(r['verdict']) for r in ok)}/{len(ok)} | "
                         f"{sum(not r['verdict'] for r in sel)} | {secs / 60:.1f} min | "
                         f"{'' if toks is None else f'{toks:,.0f}'} |")
     return rows
