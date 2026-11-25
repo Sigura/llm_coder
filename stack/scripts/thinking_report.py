@@ -1,0 +1,98 @@
+"""docs/thinking-check.md from the thinking-check replays in LLM_ROOT/results/thinking-check (finished and partial).
+
+Usage: thinking_report.py [--results DIR] [--out FILE]
+"""
+import argparse
+import glob
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+
+HEAD = """# Thinking check: thinking on only for the checking role
+
+Thinking is switched on only for the role that checks the work, and only in the best setup of each practice;
+everything else is the eval's. Thinking runs use the model card's thinking sampling (user, Nov 25): Qwen3.8 temperature
+0.6, top-p 0.95, top-k 20, presence 0; DeepSeek temperature 1.0 (the reviewer otherwise runs at burnish's 0.2).
+DeepSeek V4.1 on KT turns thinking on only with `chat_template_kwargs.thinking`, so a first reviewer run that sent only
+`enable_thinking` never thought and was discarded.
+
+Replays, not full seeds: each check runs on fixed inputs, so a gain shows up in hours instead of ~10 h per seed.
+- Pair (nav DS + driver DS, Winners #4) and review (DS + DS review, #1): the DeepSeek navigator / reviewer looks at 78
+  stored DeepSeek drafts (DeepSeek alone, seeds 1-3), labelled by the current tests: 39 fail, 39 pass. A flag (any
+  verdict but OK) on failing code is a catch, on passing code a false alarm. The navigator first writes its plan, as in
+  the pair eval. Thinking runs take 5-35 min per draft, so they use a fixed random subset of 10 failing + 10 passing
+  drafts; the no-thinking numbers are shown on the same 20 and on all 78.
+- tdd (nav Qwen3.8 + driver DS, #3): only the navigator's plan and test-writing turns (`eval_pair.py --tests-only`) on
+  all 29 tasks; score = test files that pass the task's reference solution.
+"""
+
+
+def latest(results: Path, pattern: str):
+    fs = [f for f in sorted(glob.glob(str(results / pattern))) if not Path(f).name.startswith(("invalid", "capped"))]
+    finals = [f for f in fs if not f.endswith(".partial.json")]
+    return (finals or fs or [None])[-1]
+
+
+def check_rows(results: Path, kind: str, keys: set) -> list[str]:
+    rows = []
+    for mode in ("off", "think"):
+        f = latest(results, f"*replay-{kind}-ds-{mode}*.json")
+        if not f:
+            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | not started | | | | | |")
+            continue
+        rs = json.loads(Path(f).read_text())["results"]
+        state = "partial" if f.endswith(".partial.json") else "done"
+        for name, sel in (("all 78", rs), ("subset 20", [r for r in rs if r["key"] in keys])):
+            if mode == "think" and name == "all 78":
+                continue
+            fail = [r for r in sel if not r["passed"]]
+            ok = [r for r in sel if r["passed"]]
+            secs = sum(r["seconds"] for r in sel) / len(sel) if sel else 0
+            toks = sum(r.get("tokens", 0) for r in sel) / len(sel) if sel and kind == "nav" else None
+            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | {name}: {len(sel)} done ({state}) | "
+                        f"{sum(r['flagged'] for r in fail)}/{len(fail)} | {sum(r['flagged'] for r in ok)}/{len(ok)} | "
+                        f"{sum(not r['verdict'] for r in sel)} | {secs / 60:.1f} min | "
+                        f"{'' if toks is None else f'{toks:,.0f}'} |")
+    return rows
+
+
+def tests_rows(results: Path) -> list[str]:
+    rows = []
+    for mode in ("off", "think"):
+        fs = sorted(glob.glob(str(results / f"*testsonly-{mode}-s*.json")))
+        if not fs:
+            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | not started | | | | |")
+        for f in fs:
+            rs = json.loads(Path(f).read_text())["results"]
+            seed = f.split("-s")[-1].split(".")[0]
+            state = "partial" if f.endswith(".partial.json") else "done"
+            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | s{seed}: {len(rs)}/29 ({state}) | "
+                        f"**{sum(r['nav_tests_on_ref'] is True for r in rs)}** | "
+                        f"{sum(r['tests_capped'] for r in rs)} | "
+                        f"{sum(r['navigator_tokens'] for r in rs) / max(len(rs), 1):,.0f} | "
+                        f"{sum(r['seconds'] for r in rs) / max(len(rs), 1) / 60:.1f} min |")
+    return rows
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--results", default=os.path.expanduser("~/llm_coder/llm/results/thinking-check"))
+    p.add_argument("--out", default=str(Path(__file__).resolve().parents[2] / "docs" / "thinking-check.md"))
+    args = p.parse_args()
+    results = Path(args.results)
+    keys = set(json.loads((results / "subset-per-class-10-seed1.json").read_text()))
+    head = ("| run | drafts | catches (flagged failing) | false alarms (flagged passing) | empty verdicts | "
+            "time per draft | tokens per draft |\n|---|---|---|---|---|---|---|")
+    out = [HEAD, f"State {datetime.now():%Y-%m-%d %H:%M} (regenerated by stack/scripts/thinking_report.py).", "",
+           "## Pair: DeepSeek navigator (plan + review)", "", head, *check_rows(results, "nav", keys), "",
+           "## Review: DeepSeek reviewer", "", head, *check_rows(results, "review", keys), "",
+           "## tdd: Qwen3.8 test writer (plan + tests)", "",
+           "| run | tasks | test files valid on the reference | tests capped | navigator tokens per task | "
+           "time per task |\n|---|---|---|---|---|---|", *tests_rows(results), ""]
+    Path(args.out).write_text("\n".join(out))
+    print(f"wrote {args.out}")
+
+
+if __name__ == "__main__":
+    main()
