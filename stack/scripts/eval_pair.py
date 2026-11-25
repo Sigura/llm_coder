@@ -10,6 +10,8 @@ The navigator keeps one conversation per task, so llama-server reuses its prompt
 --tests-first: after the plan the navigator writes its own test file from the task text (burnish's harness format);
 the driver sees it, and before the real tests the driver's file runs against it, with up to --tdd-rounds fix turns.
 Whether the navigator's tests pass on the task's reference solution is recorded, never shown to the models.
+--tests-only: only the navigator's plan and test turns, no driver: a cheap replay that scores the test writer alone
+(how many of its test files pass the reference), e.g. with and without --nav-think.
 --batch N: N consecutive tasks share one navigator and one driver conversation, like a PR with N changes: one plan
 turn, one driver turn writing all N files, one review turn over all of them, one revision turn for the files the
 review flagged; after the tests, one advice turn and one fix turn for the failed tasks. Scored per task; each turn's
@@ -198,7 +200,7 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
         harness = HARNESS[task["lang"]].format(file=task["file"], module=Path(task["file"]).stem)
         nav_msgs.append({"role": "user", "content": TESTS_ASK.format(harness=harness,
                                                                      test_file=TEST_FILE[task["lang"]])})
-        reply, _, usage, secs = nav.chat(nav_msgs, args.tests_max_tokens)
+        reply, tests_capped, usage, secs = nav.chat(nav_msgs, args.tests_max_tokens)
         nav_msgs.append({"role": "assistant", "content": reply})
         pending["seconds"] += secs
         pending["nav_tokens"] += usage.get("completion_tokens") or 0
@@ -207,6 +209,10 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
             drv_task += f"\n\nThe navigator's tests, `{TEST_FILE[task['lang']]}`; your file must pass them:\n```\n{tests}```"
             ref = task["dir"] / f"ref{Path(task['file']).suffix}"
             tests_on_ref = run_nav_tests(rce, task, ref.read_text(), tests)[0]
+        if args.tests_only:
+            return {"id": task["id"], "lang": task["lang"], "plan": plan, "nav_tests": tests,
+                    "nav_tests_on_ref": tests_on_ref, "tests_capped": tests_capped,
+                    "seconds": round(pending["seconds"], 1), "navigator_tokens": pending["nav_tokens"]}
     drv_msgs = [{"role": "system", "content": rce.SYSTEM}, {"role": "user", "content": drv_task}]
     attempts = []
     for _ in range(args.attempts):
@@ -378,7 +384,7 @@ def main():
     p.add_argument("--nav-url", required=True)
     p.add_argument("--nav-model")
     p.add_argument("--nav-key-file")
-    p.add_argument("--driver-url", required=True)
+    p.add_argument("--driver-url", help="required unless --tests-only")
     p.add_argument("--driver-model")
     p.add_argument("--driver-key-file")
     p.add_argument("--label", default="pair")
@@ -410,6 +416,7 @@ def main():
     p.add_argument("--tests-first", action="store_true",
                    help="navigator writes a test file after the plan; the driver's file must pass it first")
     p.add_argument("--tdd-rounds", type=int, default=2, help="driver fix turns against the navigator's tests")
+    p.add_argument("--tests-only", action="store_true", help="navigator plan + tests turns only, no driver")
     p.add_argument("--tests-max-tokens", type=int, default=6000, help="navigator tokens for the test file")
     p.add_argument("--batch", type=int, default=1, help="tasks per shared session (see the module doc)")
     p.add_argument("--task-dir", help="task folders to run instead of burnish's eval/coding/tasks")
@@ -417,6 +424,10 @@ def main():
     args = p.parse_args()
     if args.batch < 1:
         p.error("--batch must be >= 1")
+    if args.tests_only:
+        args.tests_first = True
+    elif not args.driver_url:
+        p.error("--driver-url is required unless --tests-only")
     if args.batch > 1 and (args.tests_first or args.architect or args.answer_review or args.review != "always"):
         p.error("--batch supports only the original protocol, optionally with --keep-unrevised and --nav-think")
 
@@ -428,8 +439,8 @@ def main():
         p.error("no tasks matched")
     nav = Model(args.nav_url, args.nav_model, args.nav_key_file, sampling(args, "nav"), args.nav_max_tokens, args.seed,
                 args.nav_think)
-    drv = Model(args.driver_url, args.driver_model, args.driver_key_file, sampling(args, "driver"), args.max_tokens,
-                args.seed)
+    drv = None if args.tests_only else Model(args.driver_url, args.driver_model, args.driver_key_file,
+                                             sampling(args, "driver"), args.max_tokens, args.seed)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # after each task, so a host hang loses one task, not the seed; a rerun with the same label resumes from it
@@ -448,8 +459,27 @@ def main():
         tmp.write_text(json.dumps({"results": results}, indent=1))
         os.replace(tmp, partial)
         for r in rs:
+            if args.tests_only:
+                mark = {True: "ref+", False: "ref-", None: "none"}[r["nav_tests_on_ref"]]
+                print(f"{r['id']:<28} {mark:<4} {r['seconds']:7.1f} s", flush=True)
+                continue
             marks = "".join("+" if a["passed"] else "-" for a in r["attempts"])
             print(f"{r['id']:<28} {marks:<3} {sum(a['seconds'] for a in r['attempts']):7.1f} s", flush=True)
+    if args.tests_only:
+        summary = {}
+        for lang in ("all", *sorted({r["lang"] for r in results})):
+            rs = [r for r in results if lang in ("all", r["lang"])]
+            summary[lang] = {"tasks": len(rs), "tests_on_ref": sum(r["nav_tests_on_ref"] is True for r in rs),
+                             "no_tests": sum(r["nav_tests"] is None for r in rs),
+                             "tests_capped": sum(r["tests_capped"] for r in rs),
+                             "seconds": round(sum(r["seconds"] for r in rs), 1),
+                             "navigator_tokens": sum(r["navigator_tokens"] for r in rs)}
+        out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}.json"
+        out.write_text(json.dumps({"args": {k: v for k, v in vars(args).items() if not k.endswith("key_file")},
+                                   "summary": summary, "results": results}, indent=1))
+        partial.unlink()
+        print(json.dumps(summary["all"]), out, flush=True)
+        return
     summary = rce.summarize(results, args.attempts)
     for lang, s in summary.items():
         rs = [r for r in results if lang in ("all", r["lang"])]
