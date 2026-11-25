@@ -49,6 +49,7 @@ def main():
     p.add_argument("--temperature", type=float, help="default: burnish's 0.2 (review) / DeepSeek's 1.0 (nav)")
     p.add_argument("--top-p", type=float, default=1.0)
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--per-class", type=int, help="random subset: this many failing and as many passing items")
     p.add_argument("--files", nargs="+", required=True, help="stored solo result files (the drafts)")
     p.add_argument("--label", required=True)
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/thinking-check"))
@@ -66,6 +67,11 @@ def main():
     if state["items"] is None:
         print("== labelling the stored drafts (current tests)", flush=True)
         state["items"] = load_items(rce, tasks, args.files, args.seed)
+        if args.per_class:
+            rng = random.Random(args.seed)
+            fails = [i for i in state["items"] if not i["passed"]]
+            passes = [i for i in state["items"] if i["passed"]]
+            state["items"] = rng.sample(fails, args.per_class) + rng.sample(passes, args.per_class)
     done = {r["key"] for r in state["results"]}
     print(f"{len(state['items'])} items ({sum(not i['passed'] for i in state['items'])} failing), {len(done)} done",
           flush=True)
