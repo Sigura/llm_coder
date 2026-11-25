@@ -46,7 +46,7 @@ def main():
     p.add_argument("--key-file")
     p.add_argument("--think", action="store_true")
     p.add_argument("--max-tokens", type=int, help="default: 600 (review) / 1500 (nav), as in the eval")
-    p.add_argument("--temperature", type=float, default=1.0, help="nav mode only; review mode uses burnish's 0.2")
+    p.add_argument("--temperature", type=float, help="default: burnish's 0.2 (review) / DeepSeek's 1.0 (nav)")
     p.add_argument("--top-p", type=float, default=1.0)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--files", nargs="+", required=True, help="stored solo result files (the drafts)")
@@ -54,6 +54,7 @@ def main():
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/thinking-check"))
     args = p.parse_args()
     max_tokens = args.max_tokens or (600 if args.mode == "review" else 1500)
+    temperature = args.temperature if args.temperature is not None else (0.2 if args.mode == "review" else 1.0)
 
     rce = ep.load_runner(Path(args.burnish) / "run_coding_eval.py")
     tasks = rce.load_tasks(Path(args.burnish) / "tasks", "*", {"python", "bash", "kotlin"})
@@ -73,9 +74,10 @@ def main():
         if args.key_file:
             os.environ["CODING_EVAL_REVIEW_KEY"] = Path(args.key_file).read_text().strip()
         rargs = types.SimpleNamespace(seed=args.seed, review_model=args.model, review_url=args.url.removesuffix("/v1"),
-                                      review_max_tokens=max_tokens, review_think=args.think)
+                                      review_max_tokens=max_tokens, review_think=args.think,
+                                      review_temperature=temperature)
     else:
-        nav = ep.Model(args.url, args.model, args.key_file, {"temperature": args.temperature, "top_p": args.top_p},
+        nav = ep.Model(args.url, args.model, args.key_file, {"temperature": temperature, "top_p": args.top_p},
                        max_tokens, args.seed, args.think)
 
     for it in state["items"]:

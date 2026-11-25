@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-off: thinking-check replays (2026-11-25), thinking on only for the checking role of each practice's best setup.
 # Usage: tmp_thinking_check.sh tests|review|nav [off|think]
+#   (think runs use the model card's thinking sampling, user 2026-11-25)
 #   tests: Qwen3.8 test writer of the best tdd setup (nav Q8 + driver DS): plan + tests turns only, SEEDS (default
 #          1 2 3); off on :8086 (thinking forced off), think on :8087 (tmp_qwen38_think_gpu3.sh)
 #   review: DeepSeek reviewer of DS+rDS on stored DeepSeek drafts (review_replay.py --mode review), KT :8080
@@ -35,12 +36,12 @@ done
 echo "== $(date +%T) step 2: $what $mode"
 case $what in
     tests)
-        think=() && [[ $mode == think ]] && think=(--nav-think --nav-max-tokens 16000 --tests-max-tokens 24000)
+        think=() && [[ $mode == think ]] && think=(--nav-think --nav-max-tokens 16000 --tests-max-tokens 32000 --nav-temperature 0.6 --nav-top-p 0.95 --nav-top-k 20 --nav-min-p 0 --nav-presence-penalty 0)
         Q8_URL=$url/v1 OUT=$OUT TAG=testsonly-$mode EXTRA="--tests-only ${think[*]} ${extra[*]}" \
             ./tmp_pair_matrix.sh q8:ds
         ;;
     review | nav)
-        think=() && [[ $mode == think ]] && think=(--think --max-tokens $([[ $what == review ]] && echo 8000 || echo 16000))
+        think=() && [[ $mode == think ]] && think=(--think --max-tokens 16000 --temperature 1.0)
         python3 review_replay.py --mode "$what" --url "$url/v1" --model deepseek-v4.1-flash \
             --key-file "$SECRETS_DIR/deepseek-v4.1-flash-1017.key" --files "${DRAFTS[@]}" \
             --label "replay-$what-ds-$mode" --out-dir "$OUT" "${think[@]}" "${extra[@]}"
