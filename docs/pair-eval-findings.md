@@ -291,3 +291,10 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   `sh_env_export` (failed seeds 1 and 2) passed. 4 "no fenced code block" faults (`py_apply_patch` #1, `py_ini_interp`
   #1, `sh_e_ext_count` #1 and #2), so the revise-turn fault still costs ~1 task per seed. Slot A moved on to tdd nav DS
   + driver Qwen3.8 s2 at 01:44.
+- Qwen3.8 navigating DeepSeek (KT), tests first, seed 2: **29 of 29**, pass@1 23, tests@2 29.0, in 23,587 s (seed 1:
+  24 / 19, 37,269 s), the first complete seed with streamed requests and the first tdd seed to solve everything. Mean of
+  2 seeds **26.5 pass@2**, **21.0 pass@1** (score 0.86, Winners #3 at n 2): level with the plain Q8>DS pair (26.7 /
+  19.7) at pass@2, +1.3 pass@1, at 2–3x its time. Still only 6 of 29 Qwen3.8 test files pass the reference (seed 1: 6);
+  with wrong tests DeepSeek solved 23 of 23 this time (seed 1: 19 of 23), so the seed-to-seed gap is the driver, not the
+  tests. No attempt capped, no "no fenced code block" fault; driver 185k tokens (seed 1: 283k). Slowest tasks 30–37 min
+  (`py_apply_patch`, `py_shell_split`, `py_grid_route`; seed 1's `py_grid_route` took 101 min). s3 started 03:03.
