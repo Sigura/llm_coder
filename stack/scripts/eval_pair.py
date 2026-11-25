@@ -120,7 +120,7 @@ class Model:
 
     def chat(self, messages, max_tokens=None) -> tuple[str, bool, dict, float]:
         body = {"messages": messages, "seed": self.seed, "max_tokens": max_tokens or self.max_tokens,
-                "chat_template_kwargs": {"enable_thinking": self.think}, "stream": True,
+                "chat_template_kwargs": {"enable_thinking": self.think, "thinking": self.think}, "stream": True,
                 "stream_options": {"include_usage": True}, **self.sampling}
         if self.model:
             body["model"] = self.model

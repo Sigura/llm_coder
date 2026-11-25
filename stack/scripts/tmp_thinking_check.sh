@@ -40,7 +40,7 @@ case $what in
             ./tmp_pair_matrix.sh q8:ds
         ;;
     review | nav)
-        think=() && [[ $mode == think ]] && think=(--think --max-tokens 16000)
+        think=() && [[ $mode == think ]] && think=(--think --max-tokens $([[ $what == review ]] && echo 8000 || echo 16000))
         python3 review_replay.py --mode "$what" --url "$url/v1" --model deepseek-v4.1-flash \
             --key-file "$SECRETS_DIR/deepseek-v4.1-flash-1017.key" --files "${DRAFTS[@]}" \
             --label "replay-$what-ds-$mode" --out-dir "$OUT" "${think[@]}" "${extra[@]}"
