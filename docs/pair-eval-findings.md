@@ -298,3 +298,11 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   with wrong tests DeepSeek solved 23 of 23 this time (seed 1: 19 of 23), so the seed-to-seed gap is the driver, not the
   tests. No attempt capped, no "no fenced code block" fault; driver 185k tokens (seed 1: 283k). Slowest tasks 30–37 min
   (`py_apply_patch`, `py_shell_split`, `py_grid_route`; seed 1's `py_grid_route` took 101 min). s3 started 03:03.
+- DeepSeek (KT) navigating Qwen3.8, tests first, seed 2: 22 of 29, pass@1 19, tests@2 26.29, in 17,028 s (seed 1, Nov 22:
+  20 / 17, 16,813 s). Mean of 2 seeds **21.0 pass@2**, **18.0 pass@1** (score 0.69, Winners #11): the best Qwen3.8
+  pass@1 of any setup, but 1–1.3 below the Qwen3.8 tests-first self-pair (22.3), the DeepSeek navigator pair and the
+  DeepSeek reviewer (22.0 each) at pass@2. Kotlin 4/4, Python 11/16, bash 7/9. Failed `py_expr_eval`, `py_ini_interp`,
+  `py_semver_range`, `py_shell_split`, `py_typed_load`, `sh_csv_col`, `sh_rotate` (5 of them also failed seed 1). DeepSeek's
+  test files pass the reference on only 6 of 29 tasks (seed 1: 10); Qwen3.8 solved 5 of those 6 and 17 of the 23 with wrong
+  tests (seed 1: 10 of 10, 10 of 19). No "no fenced code block" fault (seed 1: 3), none capped. Driver 246k tokens
+  (seed 1: 201k). s3 started 06:37.
