@@ -306,3 +306,19 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   test files pass the reference on only 6 of 29 tasks (seed 1: 10); Qwen3.8 solved 5 of those 6 and 17 of the 23 with wrong
   tests (seed 1: 10 of 10, 10 of 19). No "no fenced code block" fault (seed 1: 3), none capped. Driver 246k tokens
   (seed 1: 201k). s3 started 06:37.
+- Qwen3.8 navigating DeepSeek (KT), tests first, seed 3: 26 of 29, pass@1 22, tests@2 27.71, in 26,047 s (seeds 1, 2:
+  24 / 19, 29 / 23). Mean of 3 seeds **26.3 pass@2**, **21.3 pass@1** (score 0.86, Winners #3): level with the plain
+  Q8>DS pair (26.7 / 19.7) and the DS+DS pair (26.7 / 20.0) at pass@2, +1.3–1.6 pass@1, at 2–3x their time; only the
+  two reviewer setups (0.87) score higher. Kotlin 3/4, Python 14/16, bash 9/9. Failed `kt_render`, `py_apply_patch`,
+  `py_e_flatten` (`py_e_flatten` also failed seed 1). 7 of 29 navigator test files pass the reference (seeds 1, 2: 6, 6);
+  DeepSeek solved 7 of 7 with valid tests and 19 of 22 with wrong ones. No attempt capped, no "no fenced code block"
+  fault in any of the 3 seeds. Slowest `py_grid_route` 55 min.
+- DeepSeek (KT) navigating Qwen3.8, tests first, seed 3: 23 of 29, pass@1 19, tests@2 26.44, in 16,340 s (seeds 1, 2:
+  20 / 17, 22 / 19). Mean of 3 seeds **21.7 pass@2**, **18.3 pass@1** (score 0.71, Winners #11): the best Qwen3.8
+  pass@1, and within a seed of the other Qwen3.8 setups at pass@2 (tdd self-pair 22.3, DeepSeek navigator 22.0,
+  DeepSeek reviewer 22.0), at 6–7x Qwen3.8 alone's time. Kotlin 4/4, Python 12/16, bash 7/9. Failed `py_apply_patch`,
+  `py_expr_eval`, `py_ini_interp`, `py_shell_split`, `sh_csv_col`, `sh_rotate`; `py_ini_interp`, `py_shell_split`,
+  `sh_csv_col`, `sh_rotate` failed all 3 seeds. 10 of 29 DeepSeek test files pass the reference (seeds 1, 2: 10, 6);
+  Qwen3.8 solved 8 of 10 with valid tests and 15 of 19 with wrong ones. No "no fenced code block" fault, none capped.
+  Both queues finished at 11:24; the DeepSeek-written cells are complete at n 3, only Qwen3.6 + DeepSeek review s2, s3
+  remain.
