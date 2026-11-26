@@ -18,6 +18,11 @@ DeepSeek V4.1 on KT turns thinking on only with `chat_template_kwargs.thinking`,
 `enable_thinking` never thought and was discarded.
 
 Replays, not full seeds: each check runs on fixed inputs, so a gain shows up in hours instead of ~10 h per seed.
+
+Decision (user, Nov 26): pair and review thinking stopped after the 20-draft replays, no full seeds. Their setups
+already reach 0.975–0.977 quality (ceiling 1.0, seed noise 0.02–0.04), so thinking cannot show an end-to-end gain,
+while each check takes ~10x longer (about +10 h per seed). The 17 empty verdicts are not re-run. tdd seeds 2 and 3
+run to the end.
 - Pair (nav DS + driver DS, Winners #3) and review (DS + DS review, #2): the DeepSeek navigator / reviewer looks at 78
   stored DeepSeek drafts (DeepSeek alone, seeds 1-3), labelled by the current tests: 39 fail, 39 pass. A flag (any
   verdict but OK) on failing code is a catch, on passing code a false alarm. The navigator first writes its plan, as in
