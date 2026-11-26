@@ -88,4 +88,4 @@ as a stand-in for full seeds; check a few replay verdicts against end-to-end run
   bootstrap interval over tasks; do not rank setups 1-2 tasks apart.
 - Power comes from more tasks, not more seeds: the joined tasks help; --batch N needs a batch 1 vs N check on the
   same setup before its numbers are compared.
-- Audit our hidden tests for weakness (EvalPlus, SWE-Bench+): a weak test suite inflates every setup.
+- Audit our hidden tests for weakness (EvalPlus, SWE-Bench+): a weak test suite inflates every setup. Done Nov 26: real gaps in 4-5 of 29 tasks (pair-eval-report.md, Hidden-test audit).

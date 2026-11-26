@@ -231,6 +231,27 @@ Stream A (`tmp_pair_queue_ds.sh`): DeepSeek-bound pairs, seed 1 of each first, t
 Times of runs that overlap are not comparable with solo times (stream A's Qwen turns wait for stream B's);
 pass rates are.
 
+## Hidden-test audit (Nov 26)
+
+How strong are burnish's hidden tests (5-25 per task)? `stack/scripts/tmp_audit_hidden_tests.py` re-ran all 1,272
+distinct stored solutions that passed them against the navigators' test files that pass the reference solution
+(written from the task text alone, as in EvalPlus; kept only if the reference passes them twice in a row, since some
+write to fixed /tmp paths). Results: llm/results/thinking-check/hidden-test-audit.json.
+
+- 9 of 28 audited tasks: no passing solution fails any extra test (py_e_config_merge, py_e_fix_paginate,
+  py_fix_merge_intervals, py_shell_split, sh_e_ext_count, sh_env_export, sh_wordfreq, kt_render, kt_tokens).
+- Real gaps, where the task text states the behaviour the hidden tests skip:
+  py_e_flatten 20 of 35 passing solutions (non-string keys must raise), py_e_logstats 20 of 51 (empty message),
+  py_typed_load 13 of 52 (error path of an unknown key at the root), kt_lru 10 of 57 (`contains` true for a
+  null value, stated in the task).
+- Mostly ambiguity, not a gap: sh_e_replace 37 of 47 fail a test of bundled flags (`-nb`), which the usage line
+  `[-n] [-b]` does not promise.
+- Smaller counts (1-11 solutions) in 14 other tasks are not yet sorted into gap vs ambiguity.
+
+So pass@2 and quality are somewhat optimistic on 4-5 tasks, for every setup alike. Whether it shifts the ranking
+needs the per-setup share of such solutions (not computed); adding the gap checks to the hidden tests would change
+the benchmark, so all runs would need rescoring (`run_coding_eval.py --rescore`) rather than rerunning.
+
 ## Literature (summary)
 
 | work | split | result | takeaway |
