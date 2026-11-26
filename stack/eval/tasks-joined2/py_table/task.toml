@@ -1,0 +1,62 @@
+lang = "python"
+file = "solution.py"
+prompt = """
+Write one Python module for a plain-text table renderer. It consists of four parts; implement all of them in the
+same file. The functions of parts 1-3 are tested on their own too, so keep their exact names and signatures.
+Standard library only (`unicodedata` is allowed; `textwrap` is not).
+
+## Part 1
+
+Implement `display_width(s: str) -> int`, the number of terminal columns `s` takes:
+- characters whose `unicodedata.east_asian_width` is `W` or `F` take 2 columns;
+- combining marks (`unicodedata.combining(c) != 0`) and the zero-width characters U+200B, U+200C, U+200D and
+  U+FE0F take 0 columns;
+- every other character takes 1 column. Control characters (below U+0020, and U+007F) raise `ValueError`.
+
+## Part 2
+
+Implement `wrap(text: str, width: int) -> list[str]`, greedy word wrapping by display width (part 1).
+
+- `width < 1` raises `ValueError`. Words are the runs of non-space characters, separated by one or more ASCII
+  spaces; leading, trailing and repeated spaces are dropped. Text without words gives `[]`.
+- Lines are filled greedily: a word goes on the current line (after one space) if the line then still fits in
+  `width`; otherwise it starts a new line.
+- A word wider than `width` is broken into pieces: the first piece fills the rest of the current line if at least
+  one character fits after the separating space (the current line is empty, or it has room for the space and at
+  least one more character), otherwise it starts on a new line; each piece takes as many characters as fit, and
+  the last piece continues like an ordinary word. A wide (2-column) character never splits: if it does not fit,
+  it moves to the next line; a character wider than `width` (a 2-column character with `width` 1) takes a line of
+  its own. Characters of width 0 stay attached to the character before them.
+
+## Part 3
+
+Implement `parse_table(text: str) -> tuple[list[str], list[str], list[list[str]]]`, a parser for Markdown pipe
+tables, returning `(header, aligns, rows)`.
+
+- Non-blank lines only (blank lines are skipped). Every line must start and end with `|` after stripping
+  surrounding spaces; cells are the parts between unescaped `|` characters, stripped of spaces. `\\|` inside a cell
+  stands for a literal `|` (no other escapes exist; a backslash elsewhere is literal).
+- The first line is the header, the second the delimiter line, the rest are rows. Each delimiter cell is one or
+  more `-`, optionally with a `:` at either or both ends: `:--` or `---` is `"left"`, `--:` is `"right"`, `:-:`
+  is `"center"`.
+- The delimiter line must have the same number of cells as the header. A row with fewer cells is padded with
+  `""`; a row with more cells raises `ValueError`. Fewer than two lines, a line not wrapped in `|`, or a bad
+  delimiter cell raise `ValueError`.
+
+## Part 4: `render`
+
+Implement `render(text: str, max_width: int) -> str` using the functions above: it parses a Markdown table with
+`parse_table` and draws it as a boxed text table no wider than `max_width` display columns.
+
+- Layout: every line is `| c1 | c2 | ... | cN |`, where each cell is padded to its column width `w_i`, so a line
+  takes `sum(w_i) + 3 * N + 1` columns. Under the header comes a rule line `|-...-+-...-|`: `|`, then for each
+  column `w_i + 2` dashes, joined by `+`, then `|`. No other rule lines, no trailing newline.
+- Column widths: start with the natural width of each column (the widest cell, header included, by
+  `display_width`, at least 1). A column's minimum width is the width of its widest single character (at least 1).
+  While the table is wider than `max_width`, reduce by one the widest column that is still above its minimum (ties:
+  the rightmost one). If no column can shrink and the table still does not fit, raise `ValueError`.
+- Cells are wrapped with `wrap(cell, w_i)`; an empty cell is one empty line. A row (or the header) takes as many
+  lines as its tallest cell; shorter cells are filled with blank lines at the bottom.
+- Alignment within the column uses `aligns` for header and body alike: `left` pads on the right, `right` on the
+  left, `center` puts the extra space on the right when the padding is odd.
+"""

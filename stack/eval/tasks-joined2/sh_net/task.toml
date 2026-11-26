@@ -1,0 +1,59 @@
+lang = "bash"
+file = "solution.sh"
+prompt = """
+Write one bash script `solution.sh SUBCOMMAND ARGS...` with four subcommands for IPv4 address ranges. An unknown or
+missing subcommand prints a usage message to stderr and exits 2.
+
+Common rules:
+- An address is four decimal octets 0-255 separated by `.`, without leading zeros (`0` itself is fine, `01` is
+  not), e.g. `10.0.0.1`. A prefix is 0-32, also without leading zeros.
+- A SPEC is one of: `ADDR/PREFIX` (a CIDR block; host bits may be set, `10.1.2.3/8` means `10.0.0.0/8`), `A-B`
+  (an address range from A to B inclusive, A <= B, no spaces), or a single `ADDR`.
+- Ranges are printed as `A-B`, or as just `A` when A = B.
+
+## Part 1: subcommand `cidr`
+
+`solution.sh cidr ADDR/PREFIX` prints five lines:
+```
+network N/PREFIX
+broadcast B
+first F
+last L
+hosts H
+```
+N and B are the first and last address of the block. For prefixes up to 30, F = N + 1, L = B - 1 and
+H = 2^(32-PREFIX) - 2. For /31, F = N, L = B, H = 2. For /32, F = L = N and H = 1. An invalid argument (or a
+missing or extra one) prints a message to stderr and exits 2.
+
+## Part 2: subcommand `merge`
+
+`solution.sh merge` reads SPECs from stdin, one per line (leading and trailing spaces and tabs are ignored; blank
+lines and lines starting with `#` are skipped), and prints the smallest list of ranges covering exactly the same
+addresses: overlapping or adjacent ranges (`10.0.0.0-10.0.0.9` and `10.0.0.10-10.0.0.20`) are joined. Print them
+in ascending order, one per line. On the first invalid line print `line N: invalid` (N is the 1-based line number)
+to stderr and exit 1 with no stdout.
+
+## Part 3: subcommand `tocidr`
+
+`solution.sh tocidr SPEC` prints the smallest list of CIDR blocks covering exactly the SPEC's addresses, as
+`NETWORK/PREFIX`, in ascending order, one per line (`10.0.0.1-10.0.0.6` gives `10.0.0.1/32`, `10.0.0.2/31`,
+`10.0.0.4/31`, `10.0.0.6/32`; `0.0.0.0-255.255.255.255` gives `0.0.0.0/0`). An invalid argument (or a missing
+or extra one) prints a message to stderr and exits 2.
+
+## Part 4: subcommand `acl`
+
+`solution.sh acl RULES [ADDR...]` evaluates a firewall rule file.
+
+- RULES holds one rule per line: `allow SPEC`, `deny SPEC`, `allow any` or `deny any`, the two words separated by
+  spaces or tabs. Leading and trailing spaces and tabs are ignored; blank lines and lines starting with `#` are
+  skipped. On the first invalid line print `RULES:N: invalid rule` (RULES as given, N the 1-based line number) to
+  stderr and exit 1 with no stdout. A missing RULES file or an invalid ADDR argument: message to stderr, exit 2.
+- The first rule whose SPEC contains an address decides; if none does, the address is denied.
+- With ADDR arguments: print one line per ADDR in argument order: `ADDR allow N` or `ADDR deny N`, N being the line
+  number of the deciding rule, or `ADDR deny default`.
+- Without ADDR arguments: print every allowed address as the smallest list of CIDR blocks, ascending, one per line
+  (no output if nothing is allowed). Merge the allowed ranges first (as in part 2), then split each merged range into
+  CIDR blocks (as in part 3).
+
+Environment: GNU bash 5.2 (64-bit integer arithmetic), GNU coreutils, GNU sed/grep, and `awk` is mawk (POSIX awk: do not rely on gawk-only features such as `asort`, `PROCINFO`, `gensub`, `strftime`). No Python, Perl, jq, `ipcalc` or `sipcalc`.
+"""

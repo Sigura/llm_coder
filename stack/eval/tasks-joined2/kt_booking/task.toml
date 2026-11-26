@@ -1,0 +1,93 @@
+lang = "kotlin"
+file = "solution.kt"
+prompt = """
+In Kotlin (JVM, standard library only, top-level declarations in the default package), write one file
+`solution.kt` for a small room-booking service with four parts. The declarations of parts 1-3 are tested on their
+own too, so keep their exact names and signatures. Invalid arguments throw `IllegalArgumentException`.
+
+## Part 1
+
+Implement `fun parseIsoDuration(s: String): Long` (seconds) and `fun formatIsoDuration(seconds: Long): String`.
+
+- Accepted forms: `P<n>W` alone, or `P[<n>D][T[<n>H][<n>M][<n>S]]` with the components in this order, each at most
+  once. Every `<n>` is one or more ASCII digits (no sign, no fraction). At least one component is required, and a
+  `T` must be followed by at least one of H, M, S. Letters are uppercase only. Anything else (`P`, `PT`, `P1H`,
+  `PT1D`, `P1W2D`, `p1d`, `PT1.5S`, `P-1D`, ...) throws. W is 7 days, D 24 hours.
+- `formatIsoDuration` gives the canonical form: days, then `T` with hours, minutes and seconds, omitting zero
+  components and `T` when it has none, e.g. `90061` -> `P1DT1H1M1S`, `86400` -> `P1D`, `5400` -> `PT1H30M`,
+  `0` -> `PT0S`. Weeks are never used. A negative argument throws.
+
+## Part 2
+
+```kotlin
+class IntervalSet {
+    fun add(start: Long, end: Long)
+    fun remove(start: Long, end: Long)
+    operator fun contains(x: Long): Boolean
+    fun overlaps(start: Long, end: Long): Boolean
+    fun intervals(): List<Pair<Long, Long>>
+    val total: Long
+    fun gaps(from: Long, to: Long): List<Pair<Long, Long>>
+}
+```
+
+A set of numbers kept as half-open intervals `[start, end)`.
+- `add`, `remove` and `overlaps` require `start < end`, else throw. `add` joins overlapping and touching intervals
+  (`[1,3)` and `[3,5)` become `[1,5)`); `remove` may split an interval.
+- `intervals()` returns the disjoint intervals in ascending order as `start to end`; `total` is their summed
+  length. `overlaps` is true when some number lies in both the set and `[start, end)`.
+- `gaps(from, to)` returns the maximal parts of `[from, to)` not in the set, ascending; `from > to` throws, and
+  `from == to` gives an empty list.
+
+## Part 3
+
+```kotlin
+class TokenBucket(val capacity: Int, val refillMillis: Long, private val clock: () -> Long) {
+    fun tryAcquire(n: Int = 1): Boolean
+    fun available(): Int
+}
+```
+
+A rate limiter with an integer token count. `capacity < 1` or `refillMillis < 1` throws.
+- The bucket starts full; its refill reference time `t0` is `clock()` at construction.
+- Every call to `tryAcquire` or `available` first refills: with `now = clock()`, let
+  `k = (now - t0) / refillMillis` (integer division); add `k` tokens and advance `t0` by `k * refillMillis`. If the
+  bucket is then full (tokens >= capacity), set the tokens to `capacity` and `t0 = now`.
+- `tryAcquire(n)` throws if `n < 1` or `n > capacity`. If at least `n` tokens are available it takes them and
+  returns true; otherwise it takes nothing and returns false. `available()` returns the token count.
+
+## Part 4: `BookingSystem`
+
+```kotlin
+sealed class BookingResult {
+    data class Booked(val id: Int) : BookingResult()
+    data class Conflict(val withIds: List<Int>) : BookingResult()
+    object RateLimited : BookingResult()
+    data class Invalid(val reason: String) : BookingResult()
+}
+
+class BookingSystem(private val clock: () -> Long) {
+    fun book(user: String, room: String, start: Long, duration: String): BookingResult
+    fun cancel(user: String, id: Int): Boolean
+    fun bookings(room: String): List<Triple<Int, Long, Long>>
+    fun free(room: String, from: Long, to: Long): List<Pair<Long, Long>>
+}
+```
+
+Built on the parts above. Times `start`, `from` and `to` are epoch seconds; `clock` gives milliseconds and is only
+used for rate limiting.
+- `book` checks, in this order:
+  1. `duration` must parse (part 1) to more than 0 and at most one day, else `Invalid("duration")`.
+  2. The user's `TokenBucket` (part 3; created on the user's first call that gets here, capacity 3, one token per
+     60 000 ms) must give one token, else `RateLimited`. Calls that stop at step 1 use no token.
+  3. The booking `[start, start + seconds)` must not overlap an existing booking of that room (one `IntervalSet` of
+     part 2 per room), else `Conflict` with the ids of all overlapping bookings, ascending. A conflict still uses
+     the token.
+  4. Otherwise it is stored and gets the next id (1, 2, 3, ... across all rooms, only successful bookings count):
+     `Booked(id)`.
+- `cancel(user, id)` removes the booking and returns true only if it exists and belongs to `user`; otherwise it
+  returns false and changes nothing. A cancelled id is never reused.
+- `bookings(room)` lists the room's bookings as `Triple(id, start, end)` ordered by `start` (empty for an unknown
+  room). `free(room, from, to)` returns the room's `gaps(from, to)` (part 2); for an unknown room the whole range,
+  with the same argument checks.
+"""
