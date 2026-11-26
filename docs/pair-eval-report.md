@@ -406,6 +406,28 @@ Order (cheapest and most decisive first):
 | 5 | three attempts instead of two on the best FF setup | is the two-attempt cap right once early feedback exists | one seed, ~3 h |
 | 6 | AGENTS.md with the check command and the two-attempt rule, in the opencode agent eval (eval_opencode.py), with and without it | does the practice hold in a free-running agent, and does it stop debug loops | one seed per setup |
 
+Step 1 result (offline replay, Nov 26; stack/scripts/tmp_ff_replay.py): 2,054 distinct failing attempts from all
+stored solo, review and pair runs (29 tasks and both joined sets, every writer), each run through the gate:
+compile (py_compile, bash -n, kotlinc), then `import` of the Python module and shellcheck -S error. Awk programs inside
+bash scripts pass bash -n, so their syntax errors (awk prints them on any run) are counted apart, as what a smoke run
+adds.
+
+| failing attempts | n | caught by gate | + awk syntax on a run | share |
+|---|---|---|---|---|
+| Kotlin | 188 | 108 | — | 57% |
+| bash | 720 | 116 | 38 | 21% |
+| Python | 1,146 | 20 | — | 2% |
+| DeepSeek writer | 360 | 15 | 7 | 6% |
+| Qwen3.8 writer | 716 | 94 | 10 | 15% |
+| Qwen3.6 MTP writer | 547 | 83 | 14 | 18% |
+| all | 2,054 | 244 | 38 | 14% |
+
+186 of the 244 gate catches were first attempts. Python failures are 85% wrong answers (the program runs and its
+results differ), which only tests can catch (tests first), not a gate. Readout: the gate's ceiling is high for Kotlin
+and bash and for the Qwen writers (one failure in six or seven), low for DeepSeek (22 attempts over all its runs, about
+one per seed). So step 2 (Qwen3.8) is where FF can show a gain; for DeepSeek, FF0 alone cannot move the joined-task
+results, and FF1 (a real run) or tests are the levels to try there.
+
 Already covered by the matrix and not re-run: review as a hint, not a gate (the reviewer's flags do not separate failing
 from passing drafts, 33/39 vs 32/39); tests first for a mid-size writer (V4).
 
