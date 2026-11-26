@@ -364,6 +364,50 @@ Flags to add to `eval_pair.py` (opt-in, the default protocol stays as above so r
 | V5 | best-of-n with Qwen3.6 MTP (n=4, tests pick), DeepSeek fixes what still fails | cheap samples + strong fixer at equal time | Self-Repair (sampling baseline) |
 | V6 | driver must answer each review line (fix or reject with a reason) | fewer ignored or blindly applied reviews | MAST |
 
+## Practices to test next, in order (Nov 26)
+
+Practices proposed for an agent's daily loop. Evidence: [L] = our eval, [L-thin] = our eval with one seed or a few
+cases, [P] = papers.
+
+| practice | evidence |
+|---|---|
+| One command that checks the work, fast, printing only failures, with a non-zero exit: tests, or a script whose stdout is compared with a committed expected file. The agent runs it before it reports, and the failing output goes into the next attempt | [L] the retry with test output adds +5.7 to +8.3; [P] correction works with reliable external feedback |
+| A syntax and compile gate before any test: bash -n, python -m py_compile, kotlinc. It cannot leak hidden tests | [L-thin] one seed had 4 Kotlin compile errors and 2 bash syntax errors among its failed attempts |
+| Shell scripts are always executed, never accepted on reading | [L] bash 5-8 of 9 where Python is 13-16 of 16 |
+| For a mid-size writer, tests are written from the task text before the code | [L] tests first lifts Qwen3.8's first attempt by +4.3 to +5.3; after two attempts it is level with a strong reviewer, at 5 to 7 times the solo time |
+| A review is a reason to look again, never a gate. Only a program decides pass or fail | [L] the reviewer flags 33 of 39 failing drafts and 32 of 39 passing ones |
+| At most two attempts, then stop and report the output | [L] only two were measured; [L-thin] a free-running agent looped 100 debug runs |
+| A reply without the complete file is asked for once more | [L] 1-2 tasks per run with the weaker writers |
+| AGENTS.md holds only: the check command, the two-attempt rule, and what is never touched. Skills only for rare procedures, written by a person, 2-3 parts each | [P] SkillsBench: curated +16.4 points, model-written -1.3 |
+
+### Fast feedback (FF): the writer gets non-leaking feedback before its attempt is scored
+
+Like tests first, but without tests: after each draft the harness runs cheap checks that do not use the hidden tests and
+hands any failure back to the writer, up to 2 free fix turns, before the hidden tests score the attempt. Levels, each
+one a flag in `eval_pair.py` and the solo runner:
+- FF0 gate: bash -n, python -m py_compile, kotlinc (compile only).
+- FF1 gate + run: FF0, then run the program once on the task text's own example (no example: run with no input and
+  catch crashes, usage errors, non-zero exits on a valid call). Shell scripts are always run.
+- FF2 = FF1 + writer-written tests (tests first without a navigator), to compare with V4.
+
+What it should show: pass@1 is the main metric (FF acts before the first scored attempt), then pass@2, quality, min per
+solved task, and per attempt: was the draft caught by the gate, and did the fixed draft then pass the hidden tests.
+Paired per task against the same setup without FF, bootstrap as in the headline.
+
+Order (cheapest and most decisive first):
+
+| # | step | answers | cost |
+|---|---|---|---|
+| 1 | Offline replay: run FF0 and FF1 on every stored failing attempt (all matrix and joined runs), no model calls | ceiling: how many failures are compile errors, crashes or usage errors that FF could catch at all | CPU, ~30 min |
+| 2 | FF0 and FF1 on Qwen3.8 alone, 29 tasks, 3 seeds | does early feedback lift a mid-size writer, and by how much vs tests first (V4) and vs a DeepSeek reviewer | ~1 h per seed per level |
+| 3 | FF1 on DeepSeek alone and on DS + Qwen3.8 review, 29 + 12 joined tasks, seed 1, then seeds 2-3 if the gain is over ~1 task | does FF replace the reviewer, or add to it; does it narrow the gap to the DS>DS pair on joined tasks | ~2-4 h per seed per setup |
+| 4 | complete-file re-ask (once) in both runners; the pair only has --keep-unrevised, which keeps the pre-review file; same runs as 3 | the 1-2 tasks per run lost to format faults | part of 3 |
+| 5 | three attempts instead of two on the best FF setup | is the two-attempt cap right once early feedback exists | one seed, ~3 h |
+| 6 | AGENTS.md with the check command and the two-attempt rule, in the opencode agent eval (eval_opencode.py), with and without it | does the practice hold in a free-running agent, and does it stop debug loops | one seed per setup |
+
+Already covered by the matrix and not re-run: review as a hint, not a gate (the reviewer's flags do not separate failing
+from passing drafts, 33/39 vs 32/39); tests first for a mid-size writer (V4).
+
 ## Gaps and proposed runs
 
 | # | run | answers | time per seed (est.) |
