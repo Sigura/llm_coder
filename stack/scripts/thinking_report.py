@@ -22,7 +22,7 @@ Replays, not full seeds: each check runs on fixed inputs, so a gain shows up in 
 Decision (user, Nov 26): pair and review thinking stopped after the 20-draft replays, no full seeds. Their setups
 already reach 0.975–0.977 quality (ceiling 1.0, seed noise 0.02–0.04), so thinking cannot show an end-to-end gain,
 while each check takes ~10x longer (about +10 h per seed). The 17 empty verdicts are not re-run. tdd thinking
-stopped after seed 2 (user, Nov 26): 6, 6, 6 valid test files without vs 15 and 17 with is clear without seed 3.
+stopped after seed 2 (user, Nov 26): 6, 6, 6 valid test files without vs 15 and 18 with is clear without seed 3.
 Most no-thinking failures were harness mistakes the test prompt invited (Kotlin helpers redefined, pytest imported,
 bash script called after a `cd`), so the prompt was fixed (`eval_pair.py` HARNESS) and re-run without thinking.
 - Pair (nav DS + driver DS, Winners #3) and review (DS + DS review, #2): the DeepSeek navigator / reviewer looks at 78
