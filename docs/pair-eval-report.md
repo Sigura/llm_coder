@@ -41,43 +41,44 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
 
 Finished pairs so far: DeepSeek → Qwen3.8 (llama.cpp and KT), DeepSeek → DeepSeek (KT), Qwen3.8 → Qwen3.8, Qwen3.6 MTP → Qwen3.6 MTP, Qwen3.6 MTP → Qwen3.8, Qwen3.8 → Qwen3.6 MTP (navigator → driver). The rest of the matrix is running or queued (see Combinations below).
 
-## Headline (score = (0.3 pass@1 + 0.7 pass@2) / 29, sort key; pass@2 of 29)
+## Headline (sort: quality, then pass@1)
 
-Scoring. Each task gets two attempts; the second sees the test failures of the first. pass@1 counts tasks solved on
-the first attempt, pass@2 tasks solved by the second (so pass@2 >= pass@1), both out of 29 and averaged over complete
-seeds. score = (0.3 pass@1 + 0.7 pass@2) / 29 puts both on one 0–1 scale: pass@2 (what the setup solves at all)
-carries most of the weight, pass@1 (solved without a retry: fewer round trips, less wall time, and closer to how a
-user who does not paste errors back would see it) the rest. Example: DS+rQ8 20.0 / 27.3 -> (6.0 + 19.1) / 29 = 0.87;
-DeepSeek alone 19.0 / 24.7 -> 0.79. A full point of pass@1 is worth 0.01, a point of pass@2 0.024; differences under
-about 0.02 are within one seed's noise (pass@2 moves by 2–4 between seeds of the same setup). Tables sort by score, ties
-by pass@2.
+Scoring (user, Nov 26; replaces score = (0.3 pass@1 + 0.7 pass@2) / 29, kept as "old score"). Each task gets two
+attempts; the second sees the test failures of the first. pass@2 sits at 25–29 of 29 for every DeepSeek setup and moves
+2–4 between seeds of one setup, so it no longer separates setups; the old score inherited that and ignored cost.
+- quality: share of the task's hidden tests passed by the better of the two attempts (burnish's tests@2 / 29), mean of
+  the complete seeds; a near miss counts partly. Seed noise of one setup is 0.02–0.04.
+- pass@1: tasks solved without a retry, mean of complete seeds.
+- min per solved task: wall time of all complete seeds / tasks solved by pass@2.
+- vs DeepSeek alone: per task, the setup's solve rate over its seeds minus DeepSeek alone's (seeds 2, 3); the positive
+  differences summed (+, tasks gained) and the negative ones (−, tasks lost).
 
-| setup | score | pass@2 per seed | mean | pass@1 mean | time per seed |
-|---|---|---|---|---|---|
-| DS+rDS | 0.87 | 27, 28, 26 | 27.0 | 21.0 | 13,254–20,491 s |
-| DS+rQ8 | 0.87 | 29, 27, 26 | 27.3 | 20.0 | 12,900–17,712 s |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.86 | 24, 29, 26 | 26.3 | 21.3 | 23,587–37,269 s |
-| nav DeepSeek (KT) + driver DeepSeek (KT) | 0.85 | 26, 29, 25 | 26.7 | 20.0 | 13,362–19,648 s |
-| nav Qwen3.8 + driver DeepSeek (KT) | 0.85 | 26, 28, 26 | 26.7 | 19.7 | 11,335–22,266 s |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.84 | 27, 27, 26 | 26.7 | 19.3 | 14,162–25,062 s |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.83 | 24, 26, 25 | 25.0 | 22.3 | 28,028–34,307 s |
-| DeepSeek alone | 0.79 | 28 (pieced together), 23, 23 | 24.7 | 19.0 | 7,536–10,754 s |
-| nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.76 | 26, 23, 22 | 23.7 | 18.7 | 9,774–15,162 s |
-| nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.72 | 22, 20, 25 | 22.3 | 17.3 | 10,692–14,201 s |
-| DS>Q8 tdd | 0.71 | 20, 22, 23 | 21.7 | 18.3 | 16,340–17,028 s |
-| PAIR-KT | 0.68 | 20, 23, 23 | 22.0 | 14.0 | 7,819–13,198 s |
-| Q8+rDS | 0.67 | 22, 22, 22 | 22.0 | 13.7 | 7,360–11,792 s |
-| PAIR (llama.cpp) | 0.65 | 21, seed 2: 13 of the first 15 | 21 | 14 | 7,598 s |
-| nav Qwen3.8 + driver Qwen3.8 | 0.58 | 16, 22, 19 | 19.0 | 12.0 | 5,962–6,698 s |
-| Q6+rDS | 0.55 | 18 | 18 | 11 | 9,545 s |
-| Q8+rQ6 | 0.54 | 21, 20, 12 | 17.7 | 11.0 | 4,570–5,546 s |
-| Qwen3.8 alone | 0.51 | 18, 17, 15 | 16.7 | 10.0 | 2,366–2,763 s |
-| Q6+rQ8 | 0.49 | 16, 15, 16 | 15.7 | 10.7 | 2,069–2,860 s |
-| nav Qwen3.6 MTP + driver Qwen3.8 | 0.46 | 16, 17, 11 | 14.7 | 10.7 | 3,602–4,743 s (Qwen3.6 on the 3090 Ti) |
-| nav DeepSeek (KT) + driver Qwen3.6 MTP | 0.41 | 14 | 14 | 7 | 5,954 s |
-| nav Qwen3.8 + driver Qwen3.6 MTP | 0.40 | 13 | 13 | 8 | 3,000 s |
-| Qwen3.6 MTP alone | 0.31 | 12, 8, 9 | 9.7 | 7.0 | 812–914 s |
-| nav Qwen3.6 MTP + driver Qwen3.6 MTP | 0.26 | 9 | 9 | 4 | 2,704 s |
+| setup | quality | pass@1 mean | min per solved task | vs DeepSeek alone (tasks + / −) | pass@2 per seed | pass@2 mean | time per seed | old score |
+|---|---|---|---|---|---|---|---|---|
+| DS+rQ8 | 0.990 | 20.0 | 9.4 | +4.7 / −0.3 | 29, 27, 26 | 27.3 | 12,900–17,712 s | 0.87 |
+| DS+rDS | 0.977 | 21.0 | 9.8 | +5.0 / −1.0 | 27, 28, 26 | 27.0 | 13,254–20,491 s | 0.87 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) | 0.975 | 20.0 | 9.7 | +5.3 / −1.7 | 26, 29, 25 | 26.7 | 13,362–19,648 s | 0.85 |
+| nav Qwen3.8 + driver DeepSeek (KT) | 0.973 | 19.7 | 9.6 | +4.8 / −1.2 | 26, 28, 26 | 26.7 | 11,335–22,266 s | 0.85 |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.972 | 21.3 | 18.3 | +4.5 / −1.2 | 24, 29, 26 | 26.3 | 23,587–37,269 s | 0.86 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.971 | 19.3 | 12.0 | +5.0 / −1.3 | 27, 27, 26 | 26.7 | 14,162–25,062 s | 0.84 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.970 | 22.3 | 21.4 | +4.8 / −2.8 | 24, 26, 25 | 25.0 | 28,028–34,307 s | 0.83 |
+| nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.946 | 17.3 | 9.5 | +3.8 / −4.5 | 22, 20, 25 | 22.3 | 10,692–14,201 s | 0.72 |
+| DeepSeek alone | 0.940 | 19.0 | 6.6 | ref | 28 (pieced together), 23, 23 | 24.7 | 7,536–10,754 s | 0.79 |
+| nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.935 | 18.7 | 9.0 | +2.7 / −2.0 | 26, 23, 22 | 23.7 | 9,774–15,162 s | 0.76 |
+| Q8+rDS | 0.909 | 13.7 | 7.3 | +3.3 / −4.3 | 22, 22, 22 | 22.0 | 7,360–11,792 s | 0.67 |
+| PAIR-KT | 0.901 | 14.0 | 7.6 | +2.7 / −3.7 | 20, 23, 23 | 22.0 | 7,819–13,198 s | 0.68 |
+| DS>Q8 tdd | 0.894 | 18.3 | 12.9 | +3.2 / −4.5 | 20, 22, 23 | 21.7 | 16,340–17,028 s | 0.71 |
+| PAIR (llama.cpp) | 0.864 | 14 | 6.0 | +3.5 / −5.5 | 21, seed 2: 13 of the first 15 | 21 | 7,598 s | 0.65 |
+| nav Qwen3.8 + driver Qwen3.8 | 0.848 | 12.0 | 5.5 | +3.0 / −7.0 | 16, 22, 19 | 19.0 | 5,962–6,698 s | 0.58 |
+| Q8+rQ6 | 0.838 | 11.0 | 4.6 | +1.8 / −7.2 | 21, 20, 12 | 17.7 | 4,570–5,546 s | 0.54 |
+| Qwen3.8 alone | 0.830 | 10.0 | 2.5 | +1.5 / −7.8 | 18, 17, 15 | 16.7 | 2,366–2,763 s | 0.51 |
+| Q6+rDS | 0.821 | 11 | 8.8 | +2.5 / −7.5 | 18 | 18 | 9,545 s | 0.55 |
+| nav Qwen3.6 MTP + driver Qwen3.8 | 0.809 | 10.7 | 4.7 | +0.8 / −9.2 | 16, 17, 11 | 14.7 | 3,602–4,743 s (Qwen3.6 on the 3090 Ti) | 0.46 |
+| Q6+rQ8 | 0.791 | 10.7 | 2.6 | +1.2 / −8.5 | 16, 15, 16 | 15.7 | 2,069–2,860 s | 0.49 |
+| nav Qwen3.8 + driver Qwen3.6 MTP | 0.768 | 8 | 3.8 | +1.0 / −11.0 | 13 | 13 | 3,000 s | 0.40 |
+| nav DeepSeek (KT) + driver Qwen3.6 MTP | 0.762 | 7 | 7.1 | +2.5 / −11.5 | 14 | 14 | 5,954 s | 0.41 |
+| Qwen3.6 MTP alone | 0.696 | 7.0 | 1.5 | +0.7 / −14.0 | 12, 8, 9 | 9.7 | 812–914 s | 0.31 |
+| nav Qwen3.6 MTP + driver Qwen3.6 MTP | 0.667 | 4 | 5.0 | +0.0 / −14.0 | 9 | 9 | 2,704 s | 0.26 |
 
 ## Summary per run
 

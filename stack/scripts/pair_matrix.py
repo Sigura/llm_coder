@@ -162,7 +162,18 @@ def score(p1, p2):
     return (0.3 * p1 + 0.7 * p2) / 29
 
 
+def solve_rates(runs):
+    """{task: share of the runs that solved it within two attempts}."""
+    hits = {}
+    for run in runs:
+        for r in run["results"]:
+            hits.setdefault(r["id"], []).append(solved(r, 2))
+    return {t: mean(h) for t, h in hits.items()}
+
+
 def headline(all_setups):
+    ref_seeds = next(s for k, *_, s in all_setups if k == "ds-solo")
+    ref = solve_rates([ref_seeds[s] for s in SOLO_SEEDS["ds-solo"]])
     rows = []
     for key, col, _, name, seeds in all_setups:
         full = {s: r for s, r in seeds.items() if complete(r)}
@@ -181,11 +192,24 @@ def headline(all_setups):
         t = "—" if not secs else (f"{secs[0]:,.0f} s" if len(secs) == 1 else f"{min(secs):,.0f}–{max(secs):,.0f} s")
         if key in NOTES or (isinstance(key, tuple) and key[:2] in NOTES):
             t += f" ({NOTES.get(key) or NOTES[key[:2]]})"
+        quality = mean(r["summary"]["tests@2"] for r in full.values()) / 29 if full else None
+        solved_n = sum(r["summary"]["pass@2"] for r in full.values())
+        cost = sum(secs) / solved_n / 60 if solved_n else None
+        if full:
+            rate = solve_rates(full.values())
+            diff = [rate[t_] - ref.get(t_, 0) for t_ in rate]
+            vs = "ref" if key == "ds-solo" else f"+{sum(d for d in diff if d > 0):.1f} / −{-sum(d for d in diff if d < 0):.1f}"
+        else:
+            vs = "—"
         sc = score(mean(p1), mean(p2)) if p2 else -1
-        rows.append(((sc, mean(p2) if p2 else -1), (display_name(key, col, name), f"{sc:.2f}" if p2 else "—", ", ".join(parts),
-                     f"{mean(p2):.1f}" if len(p2) > 1 else (p2[0] if p2 else "—"), f"{mean(p1):.1f}" if len(p1) > 1 else (p1[0] if p1 else "—"), t)))
+        rows.append(((quality if quality is not None else -1, mean(p1) if p1 else -1),
+                     (display_name(key, col, name), f"{quality:.3f}" if quality is not None else "—",
+                      f"{mean(p1):.1f}" if len(p1) > 1 else (p1[0] if p1 else "—"),
+                      f"{cost:.1f}" if cost else "—", vs, ", ".join(parts),
+                      f"{mean(p2):.1f}" if len(p2) > 1 else (p2[0] if p2 else "—"), t, f"{sc:.2f}" if p2 else "—")))
     rows.sort(key=lambda r: (-r[0][0], -r[0][1]))
-    return table(["setup", "score", "pass@2 per seed", "mean", "pass@1 mean", "time per seed"], [r for _, r in rows])
+    return table(["setup", "quality", "pass@1 mean", "min per solved task", "vs DeepSeek alone (tasks + / −)",
+                  "pass@2 per seed", "pass@2 mean", "time per seed", "old score"], [r for _, r in rows])
 
 
 def summary(all_setups):
