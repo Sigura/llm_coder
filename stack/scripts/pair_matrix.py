@@ -7,6 +7,7 @@ pair_matrix.py --write    replace the first table under each generated heading i
 import glob
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -162,6 +163,40 @@ def score(p1, p2):
     return (0.3 * p1 + 0.7 * p2) / 29
 
 
+def test_fraction(attempt):
+    if attempt["passed"]:
+        return 1.0
+    m = re.findall(r"^(\d+)/(\d+) passed$", attempt["output"], flags=re.M)
+    return int(m[-1][0]) / int(m[-1][1]) if m and int(m[-1][1]) else 0.0
+
+
+def task_quality(runs):
+    """{task: share of hidden tests passed by the better of two attempts, mean over the runs}."""
+    q = {}
+    for run in runs:
+        for r in run["results"]:
+            q.setdefault(r["id"], []).append(max(test_fraction(a) for a in r["attempts"][:2]))
+    return {t: mean(v) for t, v in q.items()}
+
+
+def paired_ci(a, b, n=10000):
+    """95% bootstrap interval (resampling tasks) of sum over tasks of a - b, in tasks; None without common tasks."""
+    common = sorted(set(a) & set(b))
+    if not common:
+        return None
+    d = [a[t] - b[t] for t in common]
+    rng = random.Random(0)
+    sums = sorted(sum(rng.choice(d) for _ in d) for _ in range(n))
+    return sum(d), sums[int(0.025 * n)], sums[int(0.975 * n) - 1]
+
+
+def ci_cell(ci):
+    if ci is None:
+        return "—"
+    mark = "" if ci[1] <= 0 <= ci[2] else " *"
+    return f"{ci[0]:+.1f} [{ci[1]:+.1f}, {ci[2]:+.1f}]{mark}"
+
+
 def solve_rates(runs):
     """{task: share of the runs that solved it within two attempts}."""
     hits = {}
@@ -174,6 +209,9 @@ def solve_rates(runs):
 def headline(all_setups):
     ref_seeds = next(s for k, *_, s in all_setups if k == "ds-solo")
     ref = solve_rates([ref_seeds[s] for s in SOLO_SEEDS["ds-solo"]])
+    ref_q = task_quality([ref_seeds[s] for s in SOLO_SEEDS["ds-solo"]])
+    tq = {key: task_quality([r for r in seeds.values() if complete(r)]) for key, _, _, _, seeds in all_setups}
+    best = max((k for k in tq if tq[k] and len(tq[k]) == 29), key=lambda k: mean(tq[k].values()))
     rows = []
     for key, col, _, name, seeds in all_setups:
         full = {s: r for s, r in seeds.items() if complete(r)}
@@ -198,17 +236,24 @@ def headline(all_setups):
         if full:
             rate = solve_rates(full.values())
             diff = [rate[t_] - ref.get(t_, 0) for t_ in rate]
-            vs = "ref" if key == "ds-solo" else f"+{sum(d for d in diff if d > 0):.1f} / −{-sum(d for d in diff if d < 0):.1f}"
+            vs = "ref" if key == "ds-solo" else (f"+{sum(d for d in diff if d > 0):.1f} / −{-sum(d for d in diff if d < 0):.1f}; "
+                                                 f"net {ci_cell(paired_ci(rate, ref))}")
         else:
             vs = "—"
         sc = score(mean(p1), mean(p2)) if p2 else -1
+        all3 = (sum(all(solved(r, 2) for r in rs) for rs in zip(*[sorted(x["results"], key=lambda r: r["id"]) for x in full.values()]))
+                if len(full) >= 3 else None)
+        ci_ref = "ref" if key == "ds-solo" else ci_cell(paired_ci(tq[key], ref_q))
+        ci_best = "best" if key == best else ci_cell(paired_ci(tq[key], tq[best]))
         rows.append(((quality if quality is not None else -1, mean(p1) if p1 else -1),
                      (display_name(key, col, name), f"{quality:.3f}" if quality is not None else "—",
                       f"{mean(p1):.1f}" if len(p1) > 1 else (p1[0] if p1 else "—"),
-                      f"{cost:.1f}" if cost else "—", vs, ", ".join(parts),
+                      f"{cost:.1f}" if cost else "—", vs, "—" if all3 is None else all3, ci_ref, ci_best,
+                      ", ".join(parts),
                       f"{mean(p2):.1f}" if len(p2) > 1 else (p2[0] if p2 else "—"), t, f"{sc:.2f}" if p2 else "—")))
     rows.sort(key=lambda r: (-r[0][0], -r[0][1]))
     return table(["setup", "quality", "pass@1 mean", "min per solved task", "vs DeepSeek alone (tasks + / −)",
+                  "pass^3", "quality vs DeepSeek alone, tasks [95% CI]", "quality vs best, tasks [95% CI]",
                   "pass@2 per seed", "pass@2 mean", "time per seed", "old score"], [r for _, r in rows])
 
 
