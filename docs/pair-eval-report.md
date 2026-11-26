@@ -231,6 +231,41 @@ Stream A (`tmp_pair_queue_ds.sh`): DeepSeek-bound pairs, seed 1 of each first, t
 Times of runs that overlap are not comparable with solo times (stream A's Qwen turns wait for stream B's);
 pass rates are.
 
+## Joined tasks, seed 1 (Nov 26)
+
+6 composite tasks (stack/eval/tasks-joined: each joins 3 burnish tasks into one module or script plus a part that uses
+them together, with the parts' own tests plus integration tests; 28-71 hidden tests per task), the four best
+DeepSeek-written setups, seed 1 only (user: stop after s1 of all 4, then decide). Launcher stack/scripts/tmp_joined.sh;
+results: burnish results/*-joined-s1.json (solo, review), LLM_ROOT/results/pair-eval-joined/ (pairs).
+
+| setup | pass@1 of 6 | pass@2 of 6 | quality | time | min per solved task |
+|---|---|---|---|---|---|
+| DeepSeek alone | 0 | 1 | 0.857 | 131 min | 131 |
+| DeepSeek + Qwen3.8 review | 2 | 3 | 0.937 | 276 min | 92 |
+| nav DS + driver DS | 1 | 3 | **0.982** | 329 min | 110 |
+| nav Qwen3.8 + driver DS | 1 | 2 | 0.906 | 171 min | 86 |
+
+Per task (attempts: + passed, - failed; last attempt's hidden tests):
+
+| task | DeepSeek alone | DS + Qwen3.8 review | nav DS + driver DS | nav Qwen3.8 + driver DS |
+|---|---|---|---|---|
+| kt_cache_render | -+ | + | + | + |
+| py_patcher | -- 25/29 | -+ | -+ | -- 28/29 |
+| py_release | -- 26/28 | -- 25/28 | -- 26/28 | -- 27/28 |
+| py_scheduler | -- 18/28 | + | -+ | -+ |
+| sh_log_report | -- 40/41 | -- 38/41 | -- 40/41 | -- usage error |
+| sh_ops | -- usage error | -- fixture parse error | -- 70/71 | -- runtime error |
+
+Readout (one seed, 6 tasks: indicative only; times overlap, since two runs shared KT's slots most of the time):
+- The harder tasks separate the second look from solo far more than the 29 small ones: +2 solved of 6 and +0.05-0.125
+  quality for review and the DS pair; nobody solves py_release or sh_log_report, and near misses (one test short) are
+  common, so quality carries most of the signal here.
+- DS + Qwen3.8 review and the DS>DS pair solve the same 3 tasks; review more often on the first attempt (2 vs 1) and at
+  lower cost per solved task (92 vs 110 min); the pair comes closer on the failures (quality 0.982 vs 0.937, sh_ops
+  70/71 vs an error).
+- The Qwen3.8 navigator helps DeepSeek less on joined tasks (2 solved, 0.906), unlike on the small tasks, where it was
+  level with the DS navigator.
+
 ## Hidden-test audit (Nov 26)
 
 How strong are burnish's hidden tests (5-25 per task)? `stack/scripts/tmp_audit_hidden_tests.py` re-ran all 1,272
