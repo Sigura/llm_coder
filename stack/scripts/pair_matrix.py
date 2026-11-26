@@ -76,7 +76,9 @@ LABEL = re.compile(r"pair-(?P<drv>.+?)-nav-(?P<nav>deepseek-kt|deepseek|qwen3\.8
 
 
 def load(path):
-    with open(path) as f:
+    """A run's results; the -rescored.json version when there is one (hidden tests added Nov 26)."""
+    rescored = path[:-len(".json")] + "-rescored.json"
+    with open(rescored if path.endswith(".json") and os.path.exists(rescored) else path) as f:
         return json.load(f)
 
 

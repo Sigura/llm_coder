@@ -22,6 +22,9 @@ larger than the gaps it ranked, and it ignored cost.
   over tasks against the top setup. * = the interval excludes 0, i.e. a real difference at 95%. DeepSeek alone
   has per-task data only for seeds 2 and 3 (23 each, the pieced-together 28 has none), so gains over it are on
   the generous side.
+- Rescored (Nov 26): all numbers use the hidden tests with the 4 checks added after the audit (each stored solution
+  re-run; a task that now fails at attempt 1 stays failed, as the run never made attempt 2). The pre-audit table is in
+  git history (commit 6efa5f1).
 - pass^3 = tasks solved (pass@2) in all three seeds: reliability, not luck (τ-bench); setups with fewer than 3
   complete seeds show —.
 - tg = single-stream decode of the writer, tok/s. Init = server launch to ready, cold after a reboot, measured on the Nov 22
@@ -29,27 +32,27 @@ larger than the gaps it ranked, and it ignored cost.
 
 | # | setup | practice | writer | quality | pass@2 | n | pass@1 | min per solved task | vs DeepSeek alone: tasks + / −; net [95% CI] | pass^3 | quality vs best, tasks [95% CI] | writer tg | init | hardware | old score |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | DeepSeek + Qwen3.8 review | solo + reviewer | DeepSeek KT | 0.990 | **27.3** (29, 27, 26) | 3 | 20.0 | 9.4 | +4.7 / −0.3; net +4.3 [+1.5, +7.5] * | 24 | best | 18–20 | 8.3 min | + 1× 4090 | 0.87 |
-| 2 | DeepSeek + DeepSeek review | solo + reviewer | DeepSeek KT | 0.977 | **27.0** (27, 28, 26) | 3 | 21.0 | 9.8 | +5.0 / −1.0; net +4.0 [+0.7, +7.5] * | 24 | -0.4 [-1.2, +0.3] | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM | 0.87 |
-| 3 | nav DS + driver DS | pair | DeepSeek KT | 0.975 | **26.7** (26, 29, 25) | 3 | 20.0 | 9.7 | +5.3 / −1.7; net +3.7 [-0.2, +7.5] | 24 | -0.4 [-1.0, +0.1] | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM | 0.85 |
-| 4 | nav Qwen3.8 + driver DS | pair | DeepSeek KT | 0.973 | **26.7** (26, 28, 26) | 3 | 19.7 | 9.6 | +4.8 / −1.2; net +3.7 [+0.3, +7.0] * | 23 | -0.5 [-1.2, +0.0] | 18–20 | 8.3 min | + 1× 4090 | 0.85 |
-| 5 | nav Qwen3.8 + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.972 | **26.3** (24, 29, 26) | 3 | 21.3 | 18.3 | +4.5 / −1.2; net +3.3 [+0.2, +6.8] * | 22 | -0.5 [-1.4, +0.2] | 18–20 | 8.3 min | + 1× 4090 | 0.86 |
-| 6 | nav DS + driver DS (keep-unrevised) | pair, keep the pre-review file | DeepSeek KT | 0.971 | **26.7** (27, 27, 26) | 3 | 19.3 | 12.0 | +5.0 / −1.3; net +3.7 [-0.0, +7.3] | 24 | -0.5 [-1.3, +0.1] | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM | 0.84 |
-| 7 | nav DS + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.970 | **25.0** (24, 26, 25) | 3 | **22.3** | 21.4 | +4.8 / −2.8; net +2.0 [-2.0, +6.0] | 20 | -0.6 [-1.2, +0.0] | 18–20 | 8.3 min | 1× 4090 + RAM | 0.83 |
-| 8 | nav Qwen3.8 + driver Qwen3.8 (tdd) | pair, tests first | Qwen3.8 | 0.946 | 22.3 (22, 20, 25) | 3 | 17.3 | 9.5 | +3.8 / −4.5; net -0.7 [-4.8, +3.8] | 16 | -1.3 [-2.2, -0.5] * | 31–35 | 53 s | 1× 4090 | 0.72 |
-| 9 | DeepSeek alone | solo | DeepSeek | 0.940 | **24.7** | 3 | 19.0 | 6.6 | ref | — | -1.5 [-3.4, -0.1] * | 14.1–14.5 (llama.cpp) | ~5 min + warm-up | 2 GPUs + RAM | 0.79 |
-| 10 | nav Qwen3.6 MTP + driver DS | pair | DeepSeek KT | 0.935 | 23.7 (26, 23, 22) | 3 | 18.7 | 9.0 | +2.7 / −2.0; net +0.7 [-1.8, +3.5] | 17 | -1.6 [-3.0, -0.6] * | 18–20 | 8.3 min | + 1× 4090 | 0.77 |
-| 11 | Qwen3.8 + DeepSeek review | solo + reviewer | Qwen3.8 | 0.909 | 22.0 (22, 22, 22) | 3 | 13.7 | 7.3 | +3.3 / −4.3; net -1.0 [-5.0, +3.2] | 16 | -2.4 [-3.8, -1.0] * | 31–35 | 53 s (+ DS) | 3 GPUs + RAM | 0.67 |
-| 12 | nav DS (KT) + driver Qwen3.8 | pair | Qwen3.8 | 0.901 | 22.0 (20, 23, 23) | 3 | 14.0 | 7.6 | +2.7 / −3.7; net -1.0 [-4.3, +2.7] | 14 | -2.6 [-3.9, -1.4] * | 31–35 | 8.3 min | 2× 4090 + RAM | 0.68 |
-| 13 | nav DS (KT) + driver Qwen3.8 (tdd) | pair, tests first | Qwen3.8 | 0.894 | 21.7 (20, 22, 23) | 3 | 18.3 | 12.9 | +3.2 / −4.5; net -1.3 [-5.8, +3.2] | 17 | -2.8 [-4.6, -1.2] * | 31–35 | 8.3 min | 2× 4090 + RAM | 0.71 |
-| 14 | nav Qwen3.8 + driver Qwen3.8 | pair | Qwen3.8 | 0.848 | 19.0 (16, 22, 19) | 3 | 12.0 | 5.5 | +3.0 / −7.0; net -4.0 [-8.5, +0.8] | 10 | -4.1 [-5.9, -2.5] * | 31–35 | 53 s | 1× 4090 | 0.58 |
-| 15 | Qwen3.8 + Qwen3.6 MTP review | solo + reviewer | Qwen3.8 | 0.838 | 17.7 (21, 20, 12) | 3 | 11.0 | 4.6 | +1.8 / −7.2; net -5.3 [-9.0, -1.5] * | 8 | -4.4 [-6.1, -2.8] * | 31–35 | 53 s | 2× 4090 | 0.54 |
-| 16 | Qwen3.8 alone | solo | Qwen3.8 | 0.830 | 16.7 | 3 | 10.0 | 2.5 | +1.5 / −7.8; net -6.3 [-10.3, -2.3] * | 8 | -4.7 [-6.7, -2.8] * | 31–35 | 53 s | 1× 4090 | 0.51 |
-| 17 | Qwen3.6 MTP + DeepSeek review | solo + reviewer | Qwen3.6 MTP | 0.821 | 18 | 1 | 11 | 8.8 | +2.5 / −7.5; net -5.0 [-10.5, +0.0] | — | -4.9 [-8.1, -2.2] * | 205–215 | 8.3 min | 2× 4090 + RAM | 0.55 |
-| 18 | nav Qwen3.6 MTP + driver Qwen3.8 | pair | Qwen3.8 | 0.809 | 14.7 | 3 | 10.7 | 4.7 | +0.8 / −9.2; net -8.3 [-11.7, -4.8] * | 8 | -5.2 [-7.4, -3.3] * | 31–35 | 53 s | 2× 4090 | 0.47 |
-| 19 | Qwen3.6 MTP + Qwen3.8 review | solo + reviewer | Qwen3.6 MTP | 0.791 | 15.7 (16, 15, 16) | 3 | 10.7 | 2.6 | +1.2 / −8.5; net -7.3 [-11.7, -3.2] * | 10 | -5.8 [-8.0, -3.7] * | 205–215 | 53 s | 2× 4090 | 0.49 |
-| 20 | nav DS + driver Qwen3.6 MTP | pair | Qwen3.6 MTP | 0.762 | 14 | 1 | 7 | 7.1 | +2.5 / −11.5; net -9.0 [-15.0, -3.0] * | — | -6.6 [-10.3, -3.4] * | 205–215 | 8.3 min | 2× 4090 + RAM | 0.41 |
-| 21 | Qwen3.6 MTP alone | solo | Qwen3.6 MTP | 0.696 | 9.7 | 3 | 7.0 | 1.5 | +0.7 / −14.0; net -13.3 [-17.2, -9.2] * | 4 | -8.5 [-11.0, -6.1] * | 205–215 | 38 s | 1× 4090 | 0.31 |
+| 1 | DeepSeek + Qwen3.8 review | solo + reviewer | DeepSeek KT | 0.988 | 27.0 (29, 26, 26) | 3 | 19.7 | 9.5 | +4.3 / −0.3; net +4.0 [+1.3, +7.0] * | 23 | best | 18–20 | 8.3 min | + 1× 4090 | 0.86 |
+| 2 | DeepSeek + DeepSeek review | solo + reviewer | DeepSeek KT | 0.973 | 26.3 (27, 27, 25) | 3 | 21.0 | 10.1 | +4.5 / −1.2; net +3.3 [-0.0, +6.8] | 23 | -0.4 [-1.2, +0.2] | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM | 0.85 |
+| 3 | nav DS + driver DS | pair | DeepSeek KT | 0.971 | 25.7 (26, 26, 25) | 3 | 19.7 | 10.1 | +4.7 / −2.0; net +2.7 [-1.2, +6.5] | 21 | -0.5 [-1.1, -0.0] * | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM | 0.82 |
+| 4 | nav Qwen3.8 + driver DS | pair | DeepSeek KT | 0.968 | 26.0 (25, 28, 25) | 3 | 19.7 | 9.8 | +4.7 / −1.7; net +3.0 [-0.3, +6.5] | 22 | -0.6 [-1.3, -0.0] * | 18–20 | 8.3 min | + 1× 4090 | 0.83 |
+| 5 | nav Qwen3.8 + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.966 | 26.0 (24, 28, 26) | 3 | 21.3 | 18.6 | +4.5 / −1.5; net +3.0 [-0.3, +6.7] | 22 | -0.7 [-1.6, +0.1] | 18–20 | 8.3 min | + 1× 4090 | 0.85 |
+| 6 | nav DS + driver DS (tdd) | pair, tests first | DeepSeek KT | 0.965 | 24.0 (23, 24, 25) | 3 | 21.3 | 22.3 | +4.5 / −3.5; net +1.0 [-3.2, +5.2] | 18 | -0.7 [-1.3, -0.1] * | 18–20 | 8.3 min | 1× 4090 + RAM | 0.80 |
+| 7 | nav DS + driver DS (keep-unrevised) | pair, keep the pre-review file | DeepSeek KT | 0.965 | 25.3 (25, 26, 25) | 3 | 18.7 | 12.7 | +4.5 / −2.2; net +2.3 [-1.5, +6.2] | 22 | -0.7 [-1.5, -0.1] * | 18–20 | 8.3 min | 1× 4090 + ~330 GB RAM | 0.80 |
+| 8 | nav Qwen3.8 + driver Qwen3.8 (tdd) | pair, tests first | Qwen3.8 | 0.940 | 21.7 (21, 19, 25) | 3 | 17.0 | 9.8 | +3.3 / −4.7; net -1.3 [-5.5, +3.0] | 15 | -1.4 [-2.3, -0.6] * | 31–35 | 53 s | 1× 4090 | 0.70 |
+| 9 | DeepSeek alone | solo | DeepSeek | 0.938 | 24.7 (28, 23, 23) | 3 | 19.0 | 6.6 | ref | — | -1.5 [-3.4, -0.1] * | 14.1–14.5 (llama.cpp) | ~5 min + warm-up | 2 GPUs + RAM | 0.79 |
+| 10 | nav Qwen3.6 MTP + driver DS | pair | DeepSeek KT | 0.930 | 23.0 (26, 21, 22) | 3 | 18.0 | 9.3 | +2.5 / −2.5; net -0.0 [-2.7, +2.8] | 16 | -1.7 [-3.1, -0.6] * | 18–20 | 8.3 min | + 1× 4090 | 0.74 |
+| 11 | Qwen3.8 + DeepSeek review | solo + reviewer | Qwen3.8 | 0.902 | 20.3 (21, 21, 19) | 3 | 12.3 | 7.9 | +3.3 / −6.0; net -2.7 [-7.2, +1.8] | 14 | -2.5 [-4.0, -1.2] * | 31–35 | 53 s (+ DS) | 3 GPUs + RAM | 0.62 |
+| 12 | nav DS (KT) + driver Qwen3.8 | pair | Qwen3.8 | 0.897 | 21.0 (20, 22, 21) | 3 | 13.0 | 8.0 | +2.5 / −4.5; net -2.0 [-5.3, +1.7] | 12 | -2.7 [-3.9, -1.5] * | 31–35 | 8.3 min | 2× 4090 + RAM | 0.64 |
+| 13 | nav DS (KT) + driver Qwen3.8 (tdd) | pair, tests first | Qwen3.8 | 0.890 | 21.0 (19, 21, 23) | 3 | 17.7 | 13.3 | +2.8 / −4.8; net -2.0 [-6.5, +2.5] | 15 | -2.8 [-4.6, -1.3] * | 31–35 | 8.3 min | 2× 4090 + RAM | 0.69 |
+| 14 | nav Qwen3.8 + driver Qwen3.8 | pair | Qwen3.8 | 0.843 | 18.3 (16, 21, 18) | 3 | 11.7 | 5.7 | +2.8 / −7.5; net -4.7 [-9.0, +0.2] | 10 | -4.2 [-6.0, -2.6] * | 31–35 | 53 s | 1× 4090 | 0.56 |
+| 15 | Qwen3.8 + Qwen3.6 MTP review | solo + reviewer | Qwen3.8 | 0.831 | 16.7 (19, 19, 12) | 3 | 10.3 | 4.9 | +1.8 / −8.2; net -6.3 [-10.2, -2.3] * | 7 | -4.6 [-6.2, -3.0] * | 31–35 | 53 s | 2× 4090 | 0.51 |
+| 16 | Qwen3.8 alone | solo | Qwen3.8 | 0.825 | 15.7 (17, 16, 14) | 3 | 9.0 | 2.7 | +1.5 / −8.8; net -7.3 [-11.3, -3.2] * | 7 | -4.7 [-6.8, -2.9] * | 31–35 | 53 s | 1× 4090 | 0.47 |
+| 17 | Qwen3.6 MTP + DeepSeek review | solo + reviewer | Qwen3.6 MTP | 0.812 | 16 | 1 | 10 | 9.9 | +1.5 / −8.5; net -7.0 [-12.0, -2.0] * | — | -5.1 [-8.2, -2.4] * | 205–215 | 8.3 min | 2× 4090 + RAM | 0.49 |
+| 18 | nav Qwen3.6 MTP + driver Qwen3.8 | pair | Qwen3.8 | 0.803 | 14.0 (16, 16, 10) | 3 | 10.3 | 4.9 | +0.8 / −9.8; net -9.0 [-12.5, -5.3] * | 7 | -5.4 [-7.5, -3.4] * | 31–35 | 53 s | 2× 4090 | 0.44 |
+| 19 | Qwen3.6 MTP + Qwen3.8 review | solo + reviewer | Qwen3.6 MTP | 0.783 | 14.0 (14, 13, 15) | 3 | 9.7 | 3.0 | +0.5 / −9.5; net -9.0 [-13.0, -5.2] * | 8 | -6.0 [-8.1, -3.9] * | 205–215 | 53 s | 2× 4090 | 0.44 |
+| 20 | nav DS + driver Qwen3.6 MTP | pair | Qwen3.6 MTP | 0.757 | 14 | 1 | 7 | 7.1 | +2.5 / −11.5; net -9.0 [-15.0, -3.0] * | — | -6.7 [-10.5, -3.5] * | 205–215 | 8.3 min | 2× 4090 + RAM | 0.41 |
+| 21 | Qwen3.6 MTP alone | solo | Qwen3.6 MTP | 0.690 | 9.3 (11, 8, 9) | 3 | 6.7 | 1.5 | +0.7 / −14.3; net -13.7 [-17.3, -9.5] * | 3 | -8.6 [-11.0, -6.3] * | 205–215 | 38 s | 1× 4090 | 0.29 |
 
 Practice effect per writer (pass@2; n > 1 marked):
 
@@ -73,11 +76,12 @@ Readout:
   seed noise), each gains about 5 tasks over DeepSeek alone and loses 0.3–2.8. They differ in cost: review and the
   plain pairs take 9.4–9.8 min per solved task (keep-unrevised 12.0), tests first 18.3–21.4. DeepSeek + Qwen3.8 review
   is the best trade: top quality, fewest losses (−0.3), cheapest of the seven. tdd buys pass@1 (21.3–22.3) at 2x the cost.
-  With intervals (Nov 26): only DS + Qwen3.8 review beats DeepSeek alone on quality (+1.5 tasks [+0.1, +3.4]); on
-  solved tasks DS + Qwen3.8 review, DS + DS review, Q8>DS and its tdd variant are clearly ahead (net +3.3 to +4.3,
-  intervals above 0), DS>DS pair and keep-unrevised are borderline (lower ends −0.2, −0.0). No setup in the top seven
-  is distinguishable from the best (all intervals include 0); everything from Qwen3.8 tdd down is below it. pass^3
-  is 22–24 for the top six, 20 for DS>DS tdd.
+  Rescored (Nov 26, hidden tests strengthened on 4 tasks after the audit, see pair-eval-report.md): every setup
+  except DeepSeek alone loses 0-3 tasks per seed. With intervals, only DS + Qwen3.8 review is clearly ahead of
+  DeepSeek alone on solved tasks (net +4.0 [+1.3, +7.0]); DS + DS review is borderline (+3.3, lower end -0.0), the
+  pairs and tdd are not (lower ends -0.3 to -3.2). On quality DS + Qwen3.8 review now also separates from the DeepSeek
+  pairs, tdd DS>DS and keep-unrevised (vs best intervals below 0), only DS + DS review and Q8>DS tdd stay level with it.
+  DeepSeek alone's seed 1 (28, pieced together) could not be rescored, so its mean stays slightly high.
 - Best quality (n 3): three DeepSeek-driven pairs, level: DeepSeek navigating DeepSeek 26.7 over 3 seeds (26, 29, 25, pass@1
   20 every seed), Qwen3.8 navigating DeepSeek 26.7 over 3 seeds (26, 28, 26, pass@1 19.7; 11–12k s per seed when KT
   is not shared three ways, the fastest DeepSeek pair), and keep-unrevised DS+DS 26.7 over 3 seeds (27, 27, 26, pass@1
@@ -103,27 +107,27 @@ Readout:
 
 | setup | quality | pass@1 mean | min per solved task | vs DeepSeek alone (tasks + / −) | pass^3 | quality vs DeepSeek alone, tasks [95% CI] | quality vs best, tasks [95% CI] | pass@2 per seed | pass@2 mean | time per seed | old score |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| DS+rQ8 | 0.990 | 20.0 | 9.4 | +4.7 / −0.3; net +4.3 [+1.5, +7.5] * | 24 | +1.5 [+0.1, +3.4] * | best | 29, 27, 26 | 27.3 | 12,900–17,712 s | 0.87 |
-| DS+rDS | 0.977 | 21.0 | 9.8 | +5.0 / −1.0; net +4.0 [+0.7, +7.5] * | 24 | +1.1 [-0.2, +2.6] | -0.4 [-1.2, +0.3] | 27, 28, 26 | 27.0 | 13,254–20,491 s | 0.87 |
-| nav DeepSeek (KT) + driver DeepSeek (KT) | 0.975 | 20.0 | 9.7 | +5.3 / −1.7; net +3.7 [-0.2, +7.5] | 24 | +1.0 [-0.5, +3.0] | -0.4 [-1.0, +0.1] | 26, 29, 25 | 26.7 | 13,362–19,648 s | 0.85 |
-| nav Qwen3.8 + driver DeepSeek (KT) | 0.973 | 19.7 | 9.6 | +4.8 / −1.2; net +3.7 [+0.3, +7.0] * | 23 | +0.9 [-0.4, +2.5] | -0.5 [-1.2, +0.0] | 26, 28, 26 | 26.7 | 11,335–22,266 s | 0.85 |
-| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.972 | 21.3 | 18.3 | +4.5 / −1.2; net +3.3 [+0.2, +6.8] * | 22 | +0.9 [-0.7, +3.0] | -0.5 [-1.4, +0.2] | 24, 29, 26 | 26.3 | 23,587–37,269 s | 0.86 |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.971 | 19.3 | 12.0 | +5.0 / −1.3; net +3.7 [-0.0, +7.3] | 24 | +0.9 [-0.6, +2.9] | -0.5 [-1.3, +0.1] | 27, 27, 26 | 26.7 | 14,162–25,062 s | 0.84 |
-| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.970 | 22.3 | 21.4 | +4.8 / −2.8; net +2.0 [-2.0, +6.0] | 20 | +0.9 [-0.5, +2.8] | -0.6 [-1.2, +0.0] | 24, 26, 25 | 25.0 | 28,028–34,307 s | 0.83 |
-| nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.946 | 17.3 | 9.5 | +3.8 / −4.5; net -0.7 [-4.8, +3.8] | 16 | +0.2 [-1.4, +2.3] | -1.3 [-2.2, -0.5] * | 22, 20, 25 | 22.3 | 10,692–14,201 s | 0.72 |
-| DeepSeek alone | 0.940 | 19.0 | 6.6 | ref | — | ref | -1.5 [-3.4, -0.1] * | 28 (pieced together), 23, 23 | 24.7 | 7,536–10,754 s | 0.79 |
-| nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.935 | 18.7 | 9.0 | +2.7 / −2.0; net +0.7 [-1.8, +3.5] | 17 | -0.2 [-1.2, +0.9] | -1.6 [-3.0, -0.6] * | 26, 23, 22 | 23.7 | 9,774–15,162 s | 0.76 |
-| Q8+rDS | 0.909 | 13.7 | 7.3 | +3.3 / −4.3; net -1.0 [-5.0, +3.2] | 16 | -0.9 [-3.0, +1.6] | -2.4 [-3.8, -1.0] * | 22, 22, 22 | 22.0 | 7,360–11,792 s | 0.67 |
-| PAIR-KT | 0.901 | 14.0 | 7.6 | +2.7 / −3.7; net -1.0 [-4.3, +2.7] | 14 | -1.1 [-3.0, +1.2] | -2.6 [-3.9, -1.4] * | 20, 23, 23 | 22.0 | 7,819–13,198 s | 0.68 |
-| DS>Q8 tdd | 0.894 | 18.3 | 12.9 | +3.2 / −4.5; net -1.3 [-5.8, +3.2] | 17 | -1.3 [-3.6, +1.2] | -2.8 [-4.6, -1.2] * | 20, 22, 23 | 21.7 | 16,340–17,028 s | 0.71 |
-| PAIR (llama.cpp) | 0.864 | 14 | 6.0 | +3.5 / −5.5; net -2.0 [-7.0, +3.0] | — | -2.2 [-5.7, +1.1] | -3.7 [-6.9, -1.0] * | 21, seed 2: 13 of the first 15 | 21 | 7,598 s | 0.65 |
-| nav Qwen3.8 + driver Qwen3.8 | 0.848 | 12.0 | 5.5 | +3.0 / −7.0; net -4.0 [-8.5, +0.8] | 10 | -2.7 [-5.1, +0.1] | -4.1 [-5.9, -2.5] * | 16, 22, 19 | 19.0 | 5,962–6,698 s | 0.58 |
-| Q8+rQ6 | 0.838 | 11.0 | 4.6 | +1.8 / −7.2; net -5.3 [-9.0, -1.5] * | 8 | -3.0 [-5.1, -0.5] * | -4.4 [-6.1, -2.8] * | 21, 20, 12 | 17.7 | 4,570–5,546 s | 0.54 |
-| Qwen3.8 alone | 0.830 | 10.0 | 2.5 | +1.5 / −7.8; net -6.3 [-10.3, -2.3] * | 8 | -3.2 [-5.3, -1.1] * | -4.7 [-6.7, -2.8] * | 18, 17, 15 | 16.7 | 2,366–2,763 s | 0.51 |
-| Q6+rDS | 0.821 | 11 | 8.8 | +2.5 / −7.5; net -5.0 [-10.5, +0.0] | — | -3.5 [-6.9, -0.2] * | -4.9 [-8.1, -2.2] * | 18 | 18 | 9,545 s | 0.55 |
-| nav Qwen3.6 MTP + driver Qwen3.8 | 0.809 | 10.7 | 4.7 | +0.8 / −9.2; net -8.3 [-11.7, -4.8] * | 8 | -3.8 [-5.9, -1.8] * | -5.2 [-7.4, -3.3] * | 16, 17, 11 | 14.7 | 3,602–4,743 s (Qwen3.6 on the 3090 Ti) | 0.46 |
-| Q6+rQ8 | 0.791 | 10.7 | 2.6 | +1.2 / −8.5; net -7.3 [-11.7, -3.2] * | 10 | -4.3 [-6.9, -1.4] * | -5.8 [-8.0, -3.7] * | 16, 15, 16 | 15.7 | 2,069–2,860 s | 0.49 |
-| nav Qwen3.8 + driver Qwen3.6 MTP | 0.768 | 8 | 3.8 | +1.0 / −11.0; net -10.0 [-15.0, -5.0] * | — | -5.0 [-8.4, -1.8] * | -6.5 [-9.5, -3.7] * | 13 | 13 | 3,000 s | 0.40 |
-| nav DeepSeek (KT) + driver Qwen3.6 MTP | 0.762 | 7 | 7.1 | +2.5 / −11.5; net -9.0 [-15.0, -3.0] * | — | -5.2 [-9.4, -1.2] * | -6.6 [-10.3, -3.4] * | 14 | 14 | 5,954 s | 0.41 |
-| Qwen3.6 MTP alone | 0.696 | 7.0 | 1.5 | +0.7 / −14.0; net -13.3 [-17.2, -9.2] * | 4 | -7.1 [-10.0, -3.9] * | -8.5 [-11.0, -6.1] * | 12, 8, 9 | 9.7 | 812–914 s | 0.31 |
-| nav Qwen3.6 MTP + driver Qwen3.6 MTP | 0.667 | 4 | 5.0 | +0.0 / −14.0; net -14.0 [-18.5, -9.5] * | — | -7.9 [-11.5, -4.6] * | -9.4 [-12.9, -6.2] * | 9 | 9 | 2,704 s | 0.26 |
+| DS+rQ8 | 0.988 | 19.7 | 9.5 | +4.3 / −0.3; net +4.0 [+1.3, +7.0] * | 23 | +1.5 [+0.1, +3.4] * | best | 29, 26, 26 | 27.0 | 12,900–17,712 s | 0.86 |
+| DS+rDS | 0.973 | 21.0 | 10.1 | +4.5 / −1.2; net +3.3 [-0.0, +6.8] | 23 | +1.0 [-0.2, +2.5] | -0.4 [-1.2, +0.2] | 27, 27, 25 | 26.3 | 13,254–20,491 s | 0.85 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) | 0.971 | 19.7 | 10.1 | +4.7 / −2.0; net +2.7 [-1.2, +6.5] | 21 | +1.0 [-0.6, +2.9] | -0.5 [-1.1, -0.0] * | 26, 26, 25 | 25.7 | 13,362–19,648 s | 0.82 |
+| nav Qwen3.8 + driver DeepSeek (KT) | 0.968 | 19.7 | 9.8 | +4.7 / −1.7; net +3.0 [-0.3, +6.5] | 22 | +0.9 [-0.5, +2.4] | -0.6 [-1.3, -0.0] * | 25, 28, 25 | 26.0 | 11,335–22,266 s | 0.83 |
+| nav Qwen3.8 + driver DeepSeek (KT) (tdd) | 0.966 | 21.3 | 18.6 | +4.5 / −1.5; net +3.0 [-0.3, +6.7] | 22 | +0.8 [-0.8, +2.9] | -0.7 [-1.6, +0.1] | 24, 28, 26 | 26.0 | 23,587–37,269 s | 0.85 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (tdd) | 0.965 | 21.3 | 22.3 | +4.5 / −3.5; net +1.0 [-3.2, +5.2] | 18 | +0.8 [-0.6, +2.7] | -0.7 [-1.3, -0.1] * | 23, 24, 25 | 24.0 | 28,028–34,307 s | 0.80 |
+| nav DeepSeek (KT) + driver DeepSeek (KT) (keep) | 0.965 | 18.7 | 12.7 | +4.5 / −2.2; net +2.3 [-1.5, +6.2] | 22 | +0.8 [-0.7, +2.8] | -0.7 [-1.5, -0.1] * | 25, 26, 25 | 25.3 | 14,162–25,062 s | 0.80 |
+| nav Qwen3.8 + driver Qwen3.8 (tdd) | 0.940 | 17.0 | 9.8 | +3.3 / −4.7; net -1.3 [-5.5, +3.0] | 15 | +0.1 [-1.5, +2.1] | -1.4 [-2.3, -0.6] * | 21, 19, 25 | 21.7 | 10,692–14,201 s | 0.70 |
+| DeepSeek alone | 0.938 | 19.0 | 6.6 | ref | — | ref | -1.5 [-3.4, -0.1] * | 28 (pieced together), 23, 23 | 24.7 | 7,536–10,754 s | 0.79 |
+| nav Qwen3.6 MTP + driver DeepSeek (KT) | 0.930 | 18.0 | 9.3 | +2.5 / −2.5; net -0.0 [-2.7, +2.8] | 16 | -0.2 [-1.2, +0.8] | -1.7 [-3.1, -0.6] * | 26, 21, 22 | 23.0 | 9,774–15,162 s | 0.74 |
+| Q8+rDS | 0.902 | 12.3 | 7.9 | +3.3 / −6.0; net -2.7 [-7.2, +1.8] | 14 | -1.0 [-3.1, +1.4] | -2.5 [-4.0, -1.2] * | 21, 21, 19 | 20.3 | 7,360–11,792 s | 0.62 |
+| PAIR-KT | 0.897 | 13.0 | 8.0 | +2.5 / −4.5; net -2.0 [-5.3, +1.7] | 12 | -1.2 [-3.0, +1.1] | -2.7 [-3.9, -1.5] * | 20, 22, 21 | 21.0 | 7,819–13,198 s | 0.64 |
+| DS>Q8 tdd | 0.890 | 17.7 | 13.3 | +2.8 / −4.8; net -2.0 [-6.5, +2.5] | 15 | -1.4 [-3.6, +1.2] | -2.8 [-4.6, -1.3] * | 19, 21, 23 | 21.0 | 16,340–17,028 s | 0.69 |
+| PAIR (llama.cpp) | 0.864 | 14 | 6.0 | +3.5 / −5.5; net -2.0 [-7.0, +3.0] | — | -2.1 [-5.7, +1.2] | -3.6 [-6.8, -0.9] * | 21, seed 2: 13 of the first 15 | 21 | 7,598 s | 0.65 |
+| nav Qwen3.8 + driver Qwen3.8 | 0.843 | 11.7 | 5.7 | +2.8 / −7.5; net -4.7 [-9.0, +0.2] | 10 | -2.8 [-5.2, +0.0] | -4.2 [-6.0, -2.6] * | 16, 21, 18 | 18.3 | 5,962–6,698 s | 0.56 |
+| Q8+rQ6 | 0.831 | 10.3 | 4.9 | +1.8 / −8.2; net -6.3 [-10.2, -2.3] * | 7 | -3.1 [-5.2, -0.6] * | -4.6 [-6.2, -3.0] * | 19, 19, 12 | 16.7 | 4,570–5,546 s | 0.51 |
+| Qwen3.8 alone | 0.825 | 9.0 | 2.7 | +1.5 / −8.8; net -7.3 [-11.3, -3.2] * | 7 | -3.3 [-5.4, -1.2] * | -4.7 [-6.8, -2.9] * | 17, 16, 14 | 15.7 | 2,366–2,763 s | 0.47 |
+| Q6+rDS | 0.812 | 10 | 9.9 | +1.5 / −8.5; net -7.0 [-12.0, -2.0] * | — | -3.6 [-7.1, -0.4] * | -5.1 [-8.2, -2.4] * | 16 | 16 | 9,545 s | 0.49 |
+| nav Qwen3.6 MTP + driver Qwen3.8 | 0.803 | 10.3 | 4.9 | +0.8 / −9.8; net -9.0 [-12.5, -5.3] * | 7 | -3.9 [-6.1, -1.8] * | -5.4 [-7.5, -3.4] * | 16, 16, 10 | 14.0 | 3,602–4,743 s (Qwen3.6 on the 3090 Ti) | 0.44 |
+| Q6+rQ8 | 0.783 | 9.7 | 3.0 | +0.5 / −9.5; net -9.0 [-13.0, -5.2] * | 8 | -4.5 [-7.0, -1.6] * | -6.0 [-8.1, -3.9] * | 14, 13, 15 | 14.0 | 2,069–2,860 s | 0.44 |
+| nav DeepSeek (KT) + driver Qwen3.6 MTP | 0.757 | 7 | 7.1 | +2.5 / −11.5; net -9.0 [-15.0, -3.0] * | — | -5.3 [-9.5, -1.3] * | -6.7 [-10.5, -3.5] * | 14 | 14 | 5,954 s | 0.41 |
+| nav Qwen3.8 + driver Qwen3.6 MTP | 0.756 | 6 | 4.5 | +0.5 / −12.5; net -12.0 [-17.0, -7.5] * | — | -5.3 [-8.6, -2.1] * | -6.7 [-9.8, -4.0] * | 11 | 11 | 3,000 s | 0.33 |
+| Qwen3.6 MTP alone | 0.690 | 6.7 | 1.5 | +0.7 / −14.3; net -13.7 [-17.3, -9.5] * | 3 | -7.2 [-10.1, -4.0] * | -8.6 [-11.0, -6.3] * | 11, 8, 9 | 9.3 | 812–914 s | 0.29 |
+| nav Qwen3.6 MTP + driver Qwen3.6 MTP | 0.660 | 4 | 5.0 | +0.0 / −14.0; net -14.0 [-18.5, -9.5] * | — | -8.0 [-11.7, -4.7] * | -9.5 [-13.0, -6.3] * | 9 | 9 | 2,704 s | 0.26 |

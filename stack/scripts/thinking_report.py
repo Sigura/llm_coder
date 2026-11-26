@@ -56,7 +56,8 @@ BASELINE = [  # the eval's best setup per practice, thinking off (Winners, Nov 2
 def baseline_rows() -> list[str]:
     rows = []
     for practice, setup, files in BASELINE:
-        runs = [json.loads(f.read_text()) for f in files]
+        runs = [json.loads((f.with_name(f.stem + "-rescored.json") if f.with_name(f.stem + "-rescored.json").exists()
+                            else f).read_text()) for f in files]
         p1 = [r["summary"]["all"]["pass@1"] for r in runs]
         p2 = [r["summary"]["all"]["pass@2"] for r in runs]
         secs = [r["summary"]["all"]["seconds"] for r in runs]
