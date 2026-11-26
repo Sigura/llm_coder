@@ -103,10 +103,10 @@ Readout:
   review (4.6 min, 17.7 over 3 seeds: seed 3 fell to 12, so its gain over Qwen3.8 alone is only +1.0).
 - Cold start: DeepSeek KT needs 8.3 min after a reboot, the Qwen models under a minute.
 
-## Joined tasks (12 composite tasks, seed 1; interim, state 2026-11-27 00:30)
+## Joined tasks (12 composite tasks, seed 1; interim, state 2026-11-27 02:00)
 
 Details: [pair-eval-report.md](pair-eval-report.md), sections "Joined tasks, seed 1" and "Joined tasks 2, seed 1".
-DS + DeepSeek review still runs on both sets (joined2: 0 solved of the 3 done).
+DS + DeepSeek review: joined2 done (3 of 6, quality 0.939, a different 3 than DeepSeek alone); the old set still runs.
 
 | setup | pass@1 of 12 | pass@2 of 12 | quality | min per solved task |
 |---|---|---|---|---|
