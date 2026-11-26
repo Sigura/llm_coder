@@ -103,23 +103,37 @@ Readout:
   review (4.6 min, 17.7 over 3 seeds: seed 3 fell to 12, so its gain over Qwen3.8 alone is only +1.0).
 - Cold start: DeepSeek KT needs 8.3 min after a reboot, the Qwen models under a minute.
 
-## Joined tasks (12 composite tasks, seed 1; interim, state 2026-11-27 02:00)
+## Final summary (state 2026-11-27 03:00)
 
-Details: [pair-eval-report.md](pair-eval-report.md), sections "Joined tasks, seed 1" and "Joined tasks 2, seed 1".
-DS + DeepSeek review: joined2 done (3 of 6, quality 0.939, a different 3 than DeepSeek alone); the old set still runs.
+Default coder: **DeepSeek (KT) + Qwen3.8 review**. For larger, multi-part tasks the **DS>DS pair** is the equal
+alternative.
 
-| setup | pass@1 of 12 | pass@2 of 12 | quality | min per solved task |
-|---|---|---|---|---|
-| nav DS + driver DS | 3 | **8** | **0.973** | 67 |
-| DeepSeek + Qwen3.8 review | 3 | 7 | 0.960 | 70 |
-| DeepSeek alone | 1 | 4 | 0.902 | 59 |
+Two task sets, same scoring (quality = share of hidden tests passed by the better attempt; pass@1 / pass@2 = solved on
+the first / within two attempts):
 
-- On the 29 small tasks any second look adds the same 2–2.6 tasks and DS + Qwen3.8 review ranks first. On the 12
-  joined tasks both second looks again nearly double DeepSeek alone (7–8 vs 4 solved, quality +0.06–0.07); the DS>DS
-  pair is one task ahead of review (8 vs 7), within one seed's noise, and they solve different tasks (review alone
-  solved sh_net, the pair alone py_splitter and sh_files; on the old set both solve the same 3).
-- Default coder stays DS + Qwen3.8 review (user decision A): level with the pair on joined tasks within noise, best on
-  the small ones, and its reviewer runs on its own GPU, while the pair takes both KT slots.
+| setup | 29 small tasks, 3 seeds: quality | pass@2 of 29 | 12 joined tasks, seed 1: quality | pass@1 of 12 | pass@2 of 12 | min per solved (joined) |
+|---|---|---|---|---|---|---|
+| DeepSeek + Qwen3.8 review | **0.988** | **27.0** | 0.960 | 3 | 7 | 70 |
+| nav DS + driver DS | 0.971 | 25.7 | **0.973** | 3 | **8** | 67 |
+| DeepSeek + DeepSeek review | 0.973 | 26.3 | 0.958 | 3 | 5 | 77 |
+| DeepSeek alone | 0.938 | 24.7 | 0.902 | 1 | 4 | 59 |
+
+Joined tasks: 6 in stack/eval/tasks-joined, 6 in tasks-joined2, each 3 burnish tasks joined into one module or script
+with integration tests (18-71 hidden tests). Details: [pair-eval-report.md](pair-eval-report.md), "Joined tasks, seed
+1", "Joined tasks 2, seed 1" and the pooled table.
+
+- A second look is the one thing that clearly pays: on both sets every DeepSeek setup with a reviewer or navigator
+  beats DeepSeek alone (small tasks: net +2.7 to +4.0 tasks, the review's interval excludes 0; joined: +1 to +4 tasks,
+  +0.06-0.07 quality, pass@1 3 vs 1).
+- Who looks matters less than that someone looks: the top three are within a seed's noise on each set, and the order
+  flips between sets (review first on small tasks, pair first on joined, by one task).
+- Qwen3.8 is the better reviewer for DeepSeek than DeepSeek itself: level on small tasks, 7 vs 5 on joined tasks
+  (losses against solo 1 vs 3). A different model catches more of the writer's own blind spots (one seed; hypothesis).
+- Why review stays the default: best on the 29-task set over 3 seeds (the only setup whose gain over solo is
+  significant), level with the pair on joined tasks, and its reviewer runs on Qwen3.8's GPU instead of a second KT call.
+- Not settled: 3 joined tasks are solved by no setup (one test short in most cases), and the joined numbers are one
+  seed. More seeds on the 12 joined tasks would decide pair vs review; the fast-feedback study (report, "Practices to
+  test next") is the next lever, mainly for Qwen writers, Kotlin and bash.
 
 ## Headline (sort: quality, then pass@1; generated)
 

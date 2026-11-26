@@ -244,18 +244,18 @@ results: burnish results/*-joined-s1.json (solo, review), LLM_ROOT/results/pair-
 | DeepSeek + Qwen3.8 review | 2 | 3 | 0.937 | 276 min | 92 |
 | nav DS + driver DS | 1 | 3 | **0.982** | 329 min | 110 |
 | nav Qwen3.8 + driver DS | 1 | 2 | 0.906 | 171 min | 86 |
-| DeepSeek + DeepSeek review | running (started Nov 26 23:56; kt_cache_render +, py_patcher --, py_release --) | | | | |
+| DeepSeek + DeepSeek review | 2 | 2 | 0.978 | 177 min | 88 |
 
 Per task (attempts: + passed, - failed; last attempt's hidden tests):
 
-| task | DeepSeek alone | DS + Qwen3.8 review | nav DS + driver DS | nav Qwen3.8 + driver DS |
-|---|---|---|---|---|
-| kt_cache_render | -+ | + | + | + |
-| py_patcher | -- 25/29 | -+ | -+ | -- 28/29 |
-| py_release | -- 26/28 | -- 25/28 | -- 26/28 | -- 27/28 |
-| py_scheduler | -- 18/28 | + | -+ | -+ |
-| sh_log_report | -- 40/41 | -- 38/41 | -- 40/41 | -- usage error |
-| sh_ops | -- usage error | -- fixture parse error | -- 70/71 | -- runtime error |
+| task | DeepSeek alone | DS + Qwen3.8 review | nav DS + driver DS | nav Qwen3.8 + driver DS | DS + DeepSeek review |
+|---|---|---|---|---|---|
+| kt_cache_render | -+ | + | + | + | + |
+| py_patcher | -- 25/29 | -+ | -+ | -- 28/29 | -- 28/29 |
+| py_release | -- 26/28 | -- 25/28 | -- 26/28 | -- 27/28 | -- 27/28 |
+| py_scheduler | -- 18/28 | + | -+ | -+ | + |
+| sh_log_report | -- 40/41 | -- 38/41 | -- 40/41 | -- usage error | -- 39/41 |
+| sh_ops | -- usage error | -- fixture parse error | -- 70/71 | -- runtime error | -- 70/71 |
 
 Readout (one seed, 6 tasks: indicative only; times overlap, since two runs shared KT's slots most of the time):
 - The harder tasks separate the second look from solo far more than the 29 small ones: +2 solved of 6 and +0.05-0.125
@@ -266,6 +266,9 @@ Readout (one seed, 6 tasks: indicative only; times overlap, since two runs share
   70/71 vs an error).
 - The Qwen3.8 navigator helps DeepSeek less on joined tasks (2 solved, 0.906), unlike on the small tasks, where it was
   level with the DS navigator.
+- DS + DeepSeek review (run Nov 26-27, alone on one KT slot most of the time, so its time is not comparable): 2 solved,
+  both on the first attempt, and quality 0.978, close to the pair's: its failures are near misses (one test short on
+  py_patcher, py_release, sh_ops), but it never turned a failed first attempt into a pass.
 
 ## Joined tasks 2, seed 1 (Nov 26-27)
 
@@ -307,14 +310,27 @@ Readout (one seed):
   (overflow bounds, trailing empty fields, backslash continuations); burnish does not store the pre-review draft, so
   whether a revision broke a passing draft cannot be checked offline.
 
-Pooled over the 12 joined tasks (tasks-joined + tasks-joined2, seed 1), complete setups only:
+Pooled over the 12 joined tasks (tasks-joined + tasks-joined2, seed 1):
 
 | setup | pass@1 of 12 | pass@2 of 12 | quality | time | min per solved task |
 |---|---|---|---|---|---|
 | DeepSeek alone | 1 | 4 | 0.902 | 235 min | 59 |
 | nav DS + driver DS | 3 | **8** | **0.973** | 538 min | 67 |
 | DeepSeek + Qwen3.8 review | 3 | 7 | 0.960 | 492 min | 70 |
-| DeepSeek + DeepSeek review | old set running (joined2: 1 / 3 of 6, 0.939) | | | | |
+| DeepSeek + DeepSeek review | 3 | 5 | 0.958 | 387 min | 77 |
+
+Paired per task against DeepSeek alone (tasks gained / lost): DS>DS pair +4 / −0, DS + Qwen3.8 review +4 / −1
+(py_splitter), DS + DeepSeek review +4 / −3 (kt_booking, py_build, py_splitter). Pair vs Qwen3.8 review: the pair alone
+solves py_splitter and sh_files, the review alone sh_net. 9 of 12 tasks are solved by some setup; py_release,
+sh_log_report and sh_ops by none (near misses: 25-27/28, 38-40/41, 70/71).
+
+Readout (one seed, 12 tasks: a 1-2 task gap is within noise; the 29-task matrix moved 2-4 tasks between seeds):
+- Every second look beats DeepSeek alone on quality (+0.06-0.07) and pass@1 (3 vs 1); in solved tasks the pair and
+  Qwen3.8 review nearly double it (8 and 7 vs 4), DeepSeek review adds one.
+- Qwen3.8 as reviewer beats DeepSeek reviewing itself here (7 vs 5, losses 1 vs 3), unlike on the 29 small tasks,
+  where both were level (27.0 vs 26.3 over 3 seeds); a fresh model seems to matter more on larger files.
+- The pair is the best on joined tasks by one task and 0.013 quality, at about the same time per solved task as Qwen3.8
+  review (67 vs 70 min); all its calls go to KT, while Qwen3.8 review moves the reviewer onto its own GPU.
 
 ## Hidden-test audit (Nov 26)
 
