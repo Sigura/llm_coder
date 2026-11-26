@@ -103,23 +103,23 @@ Readout:
   review (4.6 min, 17.7 over 3 seeds: seed 3 fell to 12, so its gain over Qwen3.8 alone is only +1.0).
 - Cold start: DeepSeek KT needs 8.3 min after a reboot, the Qwen models under a minute.
 
-## Joined tasks (12 composite tasks, seed 1; interim, state 2026-11-26 22:40)
+## Joined tasks (12 composite tasks, seed 1; interim, state 2026-11-27 00:30)
 
 Details: [pair-eval-report.md](pair-eval-report.md), sections "Joined tasks, seed 1" and "Joined tasks 2, seed 1".
-DS + Qwen3.8 review is half done on joined2; DS + DeepSeek review runs on both sets.
+DS + DeepSeek review still runs on both sets (joined2: 0 solved of the 3 done).
 
 | setup | pass@1 of 12 | pass@2 of 12 | quality | min per solved task |
 |---|---|---|---|---|
-| nav DS + driver DS | 3 | 8 | 0.973 | 67 |
+| nav DS + driver DS | 3 | **8** | **0.973** | 67 |
+| DeepSeek + Qwen3.8 review | 3 | 7 | 0.960 | 70 |
 | DeepSeek alone | 1 | 4 | 0.902 | 59 |
-| DeepSeek + Qwen3.8 review | 2 of 9 done | 5 of 9 done | — | — |
 
-- On the 29 small tasks any second look adds the same 2–2.6 tasks and DS + Qwen3.8 review ranks first; on the joined
-  tasks so far the DS>DS pair is ahead: 8 of 12 vs 4 for DeepSeek alone, and DS + Qwen3.8 review has lost one joined2
-  task (py_splitter) that solo solved.
-- Default coder stays DS + Qwen3.8 review (user decision A) until the joined2 review and DS + DeepSeek review runs
-  finish; if the pair's lead holds over 12 tasks, the pair becomes the default for multi-part tasks at about 2x the
-  time per task.
+- On the 29 small tasks any second look adds the same 2–2.6 tasks and DS + Qwen3.8 review ranks first. On the 12
+  joined tasks both second looks again nearly double DeepSeek alone (7–8 vs 4 solved, quality +0.06–0.07); the DS>DS
+  pair is one task ahead of review (8 vs 7), within one seed's noise, and they solve different tasks (review alone
+  solved sh_net, the pair alone py_splitter and sh_files; on the old set both solve the same 3).
+- Default coder stays DS + Qwen3.8 review (user decision A): level with the pair on joined tasks within noise, best on
+  the small ones, and its reviewer runs on its own GPU, while the pair takes both KT slots.
 
 ## Headline (sort: quality, then pass@1; generated)
 

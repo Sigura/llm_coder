@@ -244,7 +244,7 @@ results: burnish results/*-joined-s1.json (solo, review), LLM_ROOT/results/pair-
 | DeepSeek + Qwen3.8 review | 2 | 3 | 0.937 | 276 min | 92 |
 | nav DS + driver DS | 1 | 3 | **0.982** | 329 min | 110 |
 | nav Qwen3.8 + driver DS | 1 | 2 | 0.906 | 171 min | 86 |
-| DeepSeek + DeepSeek review | running (queued Nov 26, waits for a free KT slot) | | | | |
+| DeepSeek + DeepSeek review | running (started Nov 26 23:56; kt_cache_render +) | | | | |
 
 Per task (attempts: + passed, - failed; last attempt's hidden tests):
 
@@ -274,14 +274,14 @@ hidden tests per task), built like tasks-joined. Each reference passes its tests
 that changes behaviour. Seed 1 of DeepSeek alone, DS + Qwen3.8 review, the DS>DS pair, and (new on joined tasks)
 DS + DeepSeek review (reviewer on KT :8080, no thinking, temperature 0.2, 600 tokens, as in matrix #2). Launchers
 stack/scripts/tmp_joined2.sh, tmp_joined_rds.sh; results: burnish results/*-joined2-s1.json (solo, review),
-LLM_ROOT/results/pair-eval-joined2/ (pairs, queue logs). State 2026-11-26 22:40.
+LLM_ROOT/results/pair-eval-joined2/ (pairs, queue logs). State 2026-11-27 00:30.
 
 | setup | pass@1 of 6 | pass@2 of 6 | quality | time | min per solved task |
 |---|---|---|---|---|---|
 | DeepSeek alone | 1 | 3 | 0.947 | 104 min | 35 |
-| DeepSeek + Qwen3.8 review | running: 0 of 3 done | 2 of 3 done | | 121 min so far | |
+| DeepSeek + Qwen3.8 review | 1 | 4 | **0.983** | 216 min | 54 |
 | nav DS + driver DS | 2 | **5** | **0.964** | 209 min | 42 |
-| DeepSeek + DeepSeek review | running (started 22:05) | | | | |
+| DeepSeek + DeepSeek review | running: 3 of 6 done, 0 solved (started 22:05) | | | | |
 
 Per task (attempts: + passed, - failed; last attempt's hidden tests):
 
@@ -289,18 +289,18 @@ Per task (attempts: + passed, - failed; last attempt's hidden tests):
 |---|---|---|---|
 | kt_booking | + | -+ | + |
 | py_build | -+ | -+ | -+ |
-| py_splitter | -+ | -- | + |
-| py_table | -- 19/20 | running | -+ |
-| sh_files | -- runtime error (52/57) | running | -+ |
-| sh_net | -- 49/60 | running | -- 47/60 |
+| py_splitter | -+ | -- 20/21 | + |
+| py_table | -- 19/20 | -+ | -+ |
+| sh_files | -- runtime error (52/57) | -- 54/57 | -+ |
+| sh_net | -- 49/60 | + | -- 47/60 |
 
-Readout so far (one seed; DS + Qwen3.8 review half done, DS + DeepSeek review just started):
+Readout so far (one seed; DS + DeepSeek review still running, 0 of 3 solved so far: kt_booking, py_build, py_splitter):
 - These tasks are easier than tasks-joined for DeepSeek alone (3 of 6 solved, quality 0.947, vs 1 and 0.857), so the
   gap to a second look is smaller in quality but not in solved tasks: the DS>DS pair solves 5 of 6, +2 over solo
   (py_table, sh_files, both on the 2nd attempt), at 2x the time.
-- DS + Qwen3.8 review lost py_splitter, which DeepSeek alone and the pair solved, and needed the retry on kt_booking,
-  which both solved first time: on the 3 tasks done it is level with or behind solo.
-- sh_net is solved by nobody so far (47-49 of 60).
+- DS + Qwen3.8 review solves 4 of 6 with the best quality (0.983): the only setup to solve sh_net (60/60, first
+  attempt), but it lost py_splitter (20/21), which DeepSeek alone and the pair solved, and needed the retry on
+  kt_booking, which both solved first time. Pair and review differ in which tasks they solve, not in how many.
 
 Pooled over the 12 joined tasks (tasks-joined + tasks-joined2, seed 1), complete setups only:
 
@@ -308,7 +308,7 @@ Pooled over the 12 joined tasks (tasks-joined + tasks-joined2, seed 1), complete
 |---|---|---|---|---|---|
 | DeepSeek alone | 1 | 4 | 0.902 | 235 min | 59 |
 | nav DS + driver DS | 3 | **8** | **0.973** | 538 min | 67 |
-| DeepSeek + Qwen3.8 review | joined2 running (old: 2 / 3 of 6, 0.937) | | | | |
+| DeepSeek + Qwen3.8 review | 3 | 7 | 0.960 | 492 min | 70 |
 | DeepSeek + DeepSeek review | both sets running | | | | |
 
 ## Hidden-test audit (Nov 26)
