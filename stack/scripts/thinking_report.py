@@ -21,8 +21,10 @@ Replays, not full seeds: each check runs on fixed inputs, so a gain shows up in 
 
 Decision (user, Nov 26): pair and review thinking stopped after the 20-draft replays, no full seeds. Their setups
 already reach 0.975–0.977 quality (ceiling 1.0, seed noise 0.02–0.04), so thinking cannot show an end-to-end gain,
-while each check takes ~10x longer (about +10 h per seed). The 17 empty verdicts are not re-run. tdd seeds 2 and 3
-run to the end.
+while each check takes ~10x longer (about +10 h per seed). The 17 empty verdicts are not re-run. tdd thinking
+stopped after seed 2 (user, Nov 26): 6, 6, 6 valid test files without vs 15 and 17 with is clear without seed 3.
+Most no-thinking failures were harness mistakes the test prompt invited (Kotlin helpers redefined, pytest imported,
+bash script called after a `cd`), so the prompt was fixed (`eval_pair.py` HARNESS) and re-run without thinking.
 - Pair (nav DS + driver DS, Winners #3) and review (DS + DS review, #2): the DeepSeek navigator / reviewer looks at 78
   stored DeepSeek drafts (DeepSeek alone, seeds 1-3), labelled by the current tests: 39 fail, 39 pass. A flag (any
   verdict but OK) on failing code is a catch, on passing code a false alarm. The navigator first writes its plan, as in
@@ -99,21 +101,25 @@ def check_rows(results: Path, kind: str, keys: set) -> list[str]:
     return rows
 
 
+TEST_MODES = {"off": "without", "think": "with thinking",
+              "off-h2": "without, fixed test prompt (Nov 26)"}
+
+
 def tests_rows(results: Path) -> list[str]:
     rows = []
-    for mode in ("off", "think"):
+    for mode in TEST_MODES:
         fs = sorted(glob.glob(str(results / f"*testsonly-{mode}-s*.json")))
         if not fs:
-            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | not started | | | | |")
+            rows.append(f"| {TEST_MODES[mode]} | not started | | | | |")
         finals = [json.loads(Path(f).read_text())["summary"]["all"] for f in fs if not f.endswith(".partial.json")]
         if finals:
-            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | mean of {len(finals)} finished "
+            rows.append(f"| {TEST_MODES[mode]} | mean of {len(finals)} finished "
                         f"seed(s) | **{sum(x['tests_on_ref'] for x in finals) / len(finals):.1f}** | | | |")
         for f in fs:
             rs = json.loads(Path(f).read_text())["results"]
             seed = f.split("-s")[-1].split(".")[0]
             state = "partial" if f.endswith(".partial.json") else "done"
-            rows.append(f"| {'with thinking' if mode == 'think' else 'without'} | s{seed}: {len(rs)}/29 ({state}) | "
+            rows.append(f"| {TEST_MODES[mode]} | s{seed}: {len(rs)}/29 ({state}) | "
                         f"**{sum(r['nav_tests_on_ref'] is True for r in rs)}** | "
                         f"{sum(r['tests_capped'] for r in rs)} | "
                         f"{sum(r['navigator_tokens'] for r in rs) / max(len(rs), 1):,.0f} | "
@@ -148,6 +154,10 @@ def summary_rows(results: Path, keys: set) -> list[str]:
         vals = [json.loads(Path(f).read_text())["summary"]["all"]["tests_on_ref"] / 29 for f in fs]
         cells.append(f"{sum(vals) / len(vals):.2f} (n {len(vals)})" if vals else "no finished seed")
     rows.append(f"| tdd | Qwen3.8 test writer: share of test files valid on the reference | {cells[0]} | {cells[1]} |")
+    fs = [f for f in sorted(glob.glob(str(results / "*testsonly-off-h2-s*.json"))) if not f.endswith(".partial.json")]
+    vals = [json.loads(Path(f).read_text())["summary"]["all"]["tests_on_ref"] / 29 for f in fs]
+    if vals:
+        rows.append(f"| tdd | same, fixed test prompt (Nov 26) | {sum(vals) / len(vals):.2f} (n {len(vals)}) | — |")
     return rows
 
 

@@ -67,12 +67,16 @@ FAIL_ASK = (
 TEST_FILE = {"python": "test.py", "bash": "test.sh", "kotlin": "Test.kt"}
 HARNESS = {
     "python": "`test.py`: `def test_*():` functions with plain `assert`, importing what they test from `{module}`, "
-              "and ending with exactly these two lines:\nfrom _runner import main\nmain(globals())\n",
-    "bash": "`test.sh`: it starts with `source ./assert.sh`, runs the script as `bash {file} ...` in an empty "
-            "temporary directory (it may create files there), compares with `check NAME EXPECTED ACTUAL` (string "
-            "equality) and ends with `finish`.",
+              "and ending with exactly these two lines:\nfrom _runner import main\nmain(globals())\n"
+              "Only the standard library is installed (no pytest): check exceptions with try/except.",
+    "bash": "`test.sh`: it starts with `source ./assert.sh`, runs the script as `bash {file} ...` in a temporary "
+            "directory that holds only `{file}`, `assert.sh` and the fixture files the task names (it may create files there; after a `cd` elsewhere, "
+            "call the script by the absolute path saved before it), compares with `check NAME EXPECTED ACTUAL` "
+            "(string equality) and ends with `finish`.",
     "kotlin": "`Test.kt`, compiled together with `{file}`: `fun main() {{ ... finish() }}` holding `check(\"name\") "
-              "{{ ... }}` blocks that use `eq(expected, actual)` and `throws<SomeException> {{ ... }}`.",
+              "{{ ... }}` blocks that use `eq(expected, actual)` and `throws<SomeException> {{ ... }}`. These four "
+              "come from the harness's TestKit.kt, compiled with it: do not define them, or anything else named "
+              "`check`, `eq`, `throws`, `finish`, `passed` or `failed`.",
 }
 TESTS_ASK = (
     "Now write the tests the driver's file must pass, as {harness} Cover your checks and the edge cases the task "
