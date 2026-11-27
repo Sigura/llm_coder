@@ -191,6 +191,23 @@ def run_nav_tests(rce, task, code: str, tests: str) -> tuple[bool, str]:
         return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
 
 
+def fast_feedback(rce, task, code: str, drv: Model, args, plan_state: dict, stats: dict) -> tuple[bool, str, str]:
+    """burnish's --feedback checks; the smoke example is planned by the driver (the writer) in a separate call."""
+    ok, out = rce.compile_gate(task, code)
+    if not ok or args.feedback == "compile" or task["lang"] == "kotlin":
+        return ok, "compile", out
+    if "plan" not in plan_state:
+        reply, _, usage, secs = drv.chat([{"role": "system", "content": rce.SMOKE_SYSTEM},
+                                          {"role": "user", "content": rce.smoke_ask(task, code)}])
+        stats["seconds"] += secs
+        stats["drv_tokens"] += usage.get("completion_tokens") or 0
+        plan_state["plan"] = rce.parse_smoke_plan(reply)
+    if plan_state["plan"] is None:
+        return True, "smoke", "no usable example plan"
+    ok, out = rce.smoke_run(task, code, plan_state["plan"])
+    return ok, "smoke", out
+
+
 def solve(task, nav: Model, drv: Model, rce, args) -> dict:
     task_text = f"{task['prompt'].strip()}\n\nWrite the file `{task['file']}`."
     ask = ARCHITECT_ASK if args.architect else PLAN_ASK
@@ -259,6 +276,23 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
                 stats["drv_tokens"] += usage.get("completion_tokens") or 0
                 fixed = rce.extract_code(reply)
                 code = fixed if fixed is not None else code
+        checks = []
+        if args.feedback != "off" and code is not None:
+            plan_state = {}
+            for r in range(args.feedback_rounds + 1):
+                ok, stage, out = fast_feedback(rce, task, code, drv, args, plan_state, stats)
+                checks.append({"stage": stage, "ok": ok, "output": out[-500:]})
+                if ok or r == args.feedback_rounds:
+                    break
+                drv_msgs += [{"role": "assistant", "content": reply},
+                             {"role": "user", "content": rce.FF_FIX.format(output=out[-rce.FEEDBACK_CHARS:], note="",
+                                                                           file=task["file"])}]
+                reply, capped, usage, secs = drv.chat(drv_msgs)
+                stats["seconds"] += secs
+                stats["drv_tokens"] += usage.get("completion_tokens") or 0
+                code = rce.extract_code(reply)
+                if code is None:
+                    break
         if code is None:
             passed = False
             output = f"reply cut off at --max-tokens {args.max_tokens}" if capped else "no fenced code block in the reply"
@@ -269,7 +303,8 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
                          "completion_tokens": stats["drv_tokens"] + stats["nav_tokens"],
                          "driver_tokens": stats["drv_tokens"], "navigator_tokens": stats["nav_tokens"],
                          "reply": reply, "review": verdict, **({"plan": plan} if not attempts else {}),
-                         **({"nav_checks": nav_checks} if tests is not None else {})})
+                         **({"nav_checks": nav_checks} if tests is not None else {}),
+                         **({"feedback": checks} if checks else {})})
         if passed:
             break
         nav_msgs.append({"role": "user", "content": FAIL_ASK.format(output=output)})
@@ -422,6 +457,10 @@ def main():
     p.add_argument("--tdd-rounds", type=int, default=2, help="driver fix turns against the navigator's tests")
     p.add_argument("--tests-only", action="store_true", help="navigator plan + tests turns only, no driver")
     p.add_argument("--tests-max-tokens", type=int, default=6000, help="navigator tokens for the test file")
+    p.add_argument("--feedback", choices=("off", "compile", "smoke"), default="off",
+                   help="burnish's checks before the real tests (after review and --tests-first), failures go back "
+                        "to the driver")
+    p.add_argument("--feedback-rounds", type=int, default=2, help="driver fix turns per attempt for --feedback")
     p.add_argument("--batch", type=int, default=1, help="tasks per shared session (see the module doc)")
     p.add_argument("--task-dir", help="task folders to run instead of burnish's eval/coding/tasks")
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/pair-eval"))
@@ -432,7 +471,8 @@ def main():
         args.tests_first = True
     elif not args.driver_url:
         p.error("--driver-url is required unless --tests-only")
-    if args.batch > 1 and (args.tests_first or args.architect or args.answer_review or args.review != "always"):
+    if args.batch > 1 and (args.tests_first or args.architect or args.answer_review or args.review != "always"
+                           or args.feedback != "off"):
         p.error("--batch supports only the original protocol, optionally with --keep-unrevised and --nav-think")
 
     root = Path(args.burnish)
