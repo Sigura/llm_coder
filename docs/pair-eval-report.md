@@ -449,6 +449,42 @@ and bash and for the Qwen writers (one failure in six or seven), low for DeepSee
 one per seed). So step 2 (Qwen3.8) is where FF can show a gain; for DeepSeek, FF0 alone cannot move the joined-task
 results, and FF1 (a real run) or tests are the levels to try there.
 
+Step 2 result (Nov 27; Qwen3.8 alone, 29 tasks, seeds 1-3, fresh no-FF baseline; burnish `--feedback`, launcher
+stack/scripts/tmp_ff_q8.sh). compile = FF0 gate; smoke = gate, then one example run the writer plans in a separate
+call (output compared ignoring whitespace); compile-rules2 = gate plus two preventive rules in the writer's system
+prompt (stack/eval/writer-rules2.txt: no `'` inside a single-quoted awk/sed program; Kotlin escapes, imports,
+nullability). Up to 2 fix turns per attempt before the hidden tests.
+
+| setup | seed 1 pass@1 / pass@2 / quality | seed 2 | seed 3 | mean pass@1 | mean pass@2 | mean quality | min per run |
+|---|---|---|---|---|---|---|---|
+| off | 13 / 15 / 0.803 | 9 / 16 / 0.903 | 5 / 13 / 0.758 | 9.0 | 14.7 | 0.821 | 46 |
+| compile | 15 / 18 / 0.862 | 10 / 18 / 0.919 | 8 / 16 / 0.813 | 11.0 | 17.3 | 0.864 | 48 |
+| smoke | 14 / 20 / 0.900 | 12 / 18 / 0.916 | 8 / 15 / 0.857 | 11.3 | **17.7** | **0.891** | 75 |
+| compile-rules2 | 10 / 15 / 0.860 | 15 / 19 / 0.897 | 15 / 19 / 0.902 | **13.3** | **17.7** | 0.886 | 44 |
+
+Paired per task against off (solve rate over the 3 seeds, summed over tasks; net [95% bootstrap CI over tasks]):
+compile +2.7 / −0.0, net +2.7 [+1.0, +4.3]; smoke +3.7 / −0.7, net +3.0 [+0.3, +6.0]; compile-rules2 +4.7 / −1.7,
+net +3.0 [+0.0, +6.0]. Catches over 3 seeds (attempts whose first check failed → fixed by the writer → then passed the
+hidden tests): compile 12 → 12 → 7; smoke 56 → 29 → 11; compile-rules2 12 → 12 → 5.
+
+Readout:
+- The compile gate is a clean win: +2.7 tasks on every seed, never loses a task it solved without it, at +4% time.
+  All its catches are real (every reference solution passes the gate), and Kotlin catches are fixed every time.
+- The smoke run adds little on top of the gate (+0.3 tasks, quality +0.03) at 1.6x its time. The writer's own
+  expected output is unreliable: of 56 smoke-stage catches only 11 ended in a passing file; the rest were the writer
+  "fixing" toward its own wrong expectation, or false alarms on files that passed the hidden tests.
+- Preventive rules: the best mean pass@1 (13.3, +2.3 over the gate alone) and the same pass@2 as smoke at the gate's
+  cost, but with a large seed spread (10, 15, 15) and losses on 1.7 tasks, so not settled at 3 seeds.
+- A rule that tells the model to check its work backfires without tools. v1 of the rules also had "Before replying,
+  check the file as bash -n, python3 -m py_compile or kotlinc would"; Qwen3.8 then answered with made-up tool calls
+  (`<tool_call><function=Bash>cat /app/solution.py`) instead of the file: 11 attempts without a code block, pass@2 8
+  on seed 1 (gate alone: 18). Stopped after seed 1. Checking belongs to the harness (a gate or a hook), not the prompt.
+- What fails and why (all stored runs): 74 of 102 bash syntax errors are awk code that bash parses as shell because
+  the single-quoted awk program closed early; in 48 of 111 Qwen bash -n failures the cause is an apostrophe in an awk
+  comment ("doesn't"). Kotlin compile errors: unresolved references (missing imports), `'\f'` (no such escape in
+  Kotlin), nullable vs non-null generics. Python failures are 85% wrong answers, which only tests catch; py_apply_patch,
+  py_expr_eval and py_shell_split fail in every seed and mode.
+
 Already covered by the matrix and not re-run: review as a hint, not a gate (the reviewer's flags do not separate failing
 from passing drafts, 33/39 vs 32/39); tests first for a mid-size writer (V4).
 
