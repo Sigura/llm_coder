@@ -485,6 +485,22 @@ Readout:
   Kotlin), nullable vs non-null generics. Python failures are 85% wrong answers, which only tests catch; py_apply_patch,
   py_expr_eval and py_shell_split fail in every seed and mode.
 
+Step 3 (Nov 27-28, in progress): FF smoke on the DeepSeek setups, seed 1, on the 29 tasks and both joined sets
+(launchers tmp_ff_ds.sh, tmp_ff_combo.sh). No-FF baselines: the 29-task 3-seed means of the matrix (DeepSeek alone's
+seed 1 has no per-task data) and the seed-1 joined runs above. pass@1 / pass@2 / quality, time.
+
+| setup | 29 tasks, FF | 29 tasks, no FF (3-seed mean) | joined (6), FF | joined, no FF | joined2 (6), FF | joined2, no FF | 12 joined pooled, FF | 12 joined, no FF |
+|---|---|---|---|---|---|---|---|---|
+| DeepSeek alone | 21 / 25 / 0.973, 367 min | 19.0 / 24.7 / 0.938, ~160 min | 1 / 2 / 0.951, 278 min | 0 / 1 / 0.857, 131 min | 0 / 3 / 0.898, 159 min | 1 / 3 / 0.947, 104 min | 1 / 5 / 0.925, 437 min | 1 / 4 / 0.902, 235 min |
+| DS + DeepSeek review | 18 / 28 / 0.983, 468 min | 21.0 / 26.3 / 0.973 (s1: 27) | 2 / **5** / **0.996**, 293 min | 2 / 2 / 0.978, 177 min | running | 1 / 3 / 0.939, 210 min | | 3 / 5 / 0.958, 387 min |
+
+- DeepSeek alone + FF: +1 task on the 12 joined tasks and +0.023 quality, +0.3 tasks and +0.035 quality on the 29,
+  at about 2x the time. On joined2 it solves a different 3 than without FF (sh_files, sh_net instead of kt_booking,
+  py_splitter). FF caught 21 attempts over the three sets; 10 were fixed and only 5 of those passed.
+- DS + DeepSeek review + FF, old joined set: 5 of 6, the best on any joined set so far, including the first solves of
+  py_release and sh_ops by any setup. FF caught only 1 attempt there, so the gain is not the checks themselves; one
+  seed.
+
 Already covered by the matrix and not re-run: review as a hint, not a gate (the reviewer's flags do not separate failing
 from passing drafts, 33/39 vs 32/39); tests first for a mid-size writer (V4).
 
