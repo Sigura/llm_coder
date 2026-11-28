@@ -401,107 +401,12 @@ cases, [P] = papers.
 | A reply without the complete file is asked for once more | [L] 1-2 tasks per run with the weaker writers |
 | AGENTS.md holds only: the check command, the two-attempt rule, and what is never touched. Skills only for rare procedures, written by a person, 2-3 parts each | [P] SkillsBench: curated +16.4 points, model-written -1.3 |
 
-### Fast feedback (FF): the writer gets non-leaking feedback before its attempt is scored
+### Fast feedback (FF)
 
-Like tests first, but without tests: after each draft the harness runs cheap checks that do not use the hidden tests and
-hands any failure back to the writer, up to 2 free fix turns, before the hidden tests score the attempt. Levels, each
-one a flag in `eval_pair.py` and the solo runner:
-- FF0 gate: bash -n, python -m py_compile, kotlinc (compile only).
-- FF1 gate + run: FF0, then run the program once on the task text's own example (no example: run with no input and
-  catch crashes, usage errors, non-zero exits on a valid call). Shell scripts are always run.
-- FF2 = FF1 + writer-written tests (tests first without a navigator), to compare with V4.
-
-What it should show: pass@1 is the main metric (FF acts before the first scored attempt), then pass@2, quality, min per
-solved task, and per attempt: was the draft caught by the gate, and did the fixed draft then pass the hidden tests.
-Paired per task against the same setup without FF, bootstrap as in the headline.
-
-Order (cheapest and most decisive first):
-
-| # | step | answers | cost |
-|---|---|---|---|
-| 1 | Offline replay: run FF0 and FF1 on every stored failing attempt (all matrix and joined runs), no model calls | ceiling: how many failures are compile errors, crashes or usage errors that FF could catch at all | CPU, ~30 min |
-| 2 | FF0 and FF1 on Qwen3.8 alone, 29 tasks, 3 seeds | does early feedback lift a mid-size writer, and by how much vs tests first (V4) and vs a DeepSeek reviewer | ~1 h per seed per level |
-| 3 | FF1 on DeepSeek alone and on DS + Qwen3.8 review, 29 + 12 joined tasks, seed 1, then seeds 2-3 if the gain is over ~1 task | does FF replace the reviewer, or add to it; does it narrow the gap to the DS>DS pair on joined tasks | ~2-4 h per seed per setup |
-| 3b | FF1 + review only when FF fails (the reviewer sees the draft and the FF output; a draft that passes FF goes straight to the hidden tests), DS + Qwen3.8 review, same tasks and seeds as 3 | does review add anything once the program has spoken, and how much reviewer time it saves; V1 does the same after a hidden-test failure | as 3, less review time |
-| 4 | complete-file re-ask (once) in both runners; the pair only has --keep-unrevised, which keeps the pre-review file; same runs as 3 | the 1-2 tasks per run lost to format faults | part of 3 |
-| 5 | three attempts instead of two on the best FF setup | is the two-attempt cap right once early feedback exists | one seed, ~3 h |
-| 6 | AGENTS.md with the check command and the two-attempt rule, in the opencode agent eval (eval_opencode.py), with and without it | does the practice hold in a free-running agent, and does it stop debug loops | one seed per setup |
-
-Step 1 result (offline replay, Nov 26; stack/scripts/tmp_ff_replay.py): 2,054 distinct failing attempts from all
-stored solo, review and pair runs (29 tasks and both joined sets, every writer), each run through the gate:
-compile (py_compile, bash -n, kotlinc), then `import` of the Python module and shellcheck -S error. Awk programs inside
-bash scripts pass bash -n, so their syntax errors (awk prints them on any run) are counted apart, as what a smoke run
-adds.
-
-| failing attempts | n | caught by gate | + awk syntax on a run | share |
-|---|---|---|---|---|
-| Kotlin | 188 | 108 | — | 57% |
-| bash | 720 | 116 | 38 | 21% |
-| Python | 1,146 | 20 | — | 2% |
-| DeepSeek writer | 360 | 15 | 7 | 6% |
-| Qwen3.8 writer | 716 | 94 | 10 | 15% |
-| Qwen3.6 MTP writer | 547 | 83 | 14 | 18% |
-| all | 2,054 | 244 | 38 | 14% |
-
-186 of the 244 gate catches were first attempts. Python failures are 85% wrong answers (the program runs and its
-results differ), which only tests can catch (tests first), not a gate. Readout: the gate's ceiling is high for Kotlin
-and bash and for the Qwen writers (one failure in six or seven), low for DeepSeek (22 attempts over all its runs, about
-one per seed). So step 2 (Qwen3.8) is where FF can show a gain; for DeepSeek, FF0 alone cannot move the joined-task
-results, and FF1 (a real run) or tests are the levels to try there.
-
-Step 2 result (Nov 27; Qwen3.8 alone, 29 tasks, seeds 1-3, fresh no-FF baseline; burnish `--feedback`, launcher
-stack/scripts/tmp_ff_q8.sh). compile = FF0 gate; smoke = gate, then one example run the writer plans in a separate
-call (output compared ignoring whitespace); compile-rules2 = gate plus two preventive rules in the writer's system
-prompt (stack/eval/writer-rules2.txt: no `'` inside a single-quoted awk/sed program; Kotlin escapes, imports,
-nullability). Up to 2 fix turns per attempt before the hidden tests.
-
-| setup | seed 1 pass@1 / pass@2 / quality | seed 2 | seed 3 | mean pass@1 | mean pass@2 | mean quality | min per run |
-|---|---|---|---|---|---|---|---|
-| off | 13 / 15 / 0.803 | 9 / 16 / 0.903 | 5 / 13 / 0.758 | 9.0 | 14.7 | 0.821 | 46 |
-| compile | 15 / 18 / 0.862 | 10 / 18 / 0.919 | 8 / 16 / 0.813 | 11.0 | 17.3 | 0.864 | 48 |
-| smoke | 14 / 20 / 0.900 | 12 / 18 / 0.916 | 8 / 15 / 0.857 | 11.3 | **17.7** | **0.891** | 75 |
-| compile-rules2 | 10 / 15 / 0.860 | 15 / 19 / 0.897 | 15 / 19 / 0.902 | **13.3** | **17.7** | 0.886 | 44 |
-
-Paired per task against off (solve rate over the 3 seeds, summed over tasks; net [95% bootstrap CI over tasks]):
-compile +2.7 / −0.0, net +2.7 [+1.0, +4.3]; smoke +3.7 / −0.7, net +3.0 [+0.3, +6.0]; compile-rules2 +4.7 / −1.7,
-net +3.0 [+0.0, +6.0]. Catches over 3 seeds (attempts whose first check failed → fixed by the writer → then passed the
-hidden tests): compile 12 → 12 → 7; smoke 56 → 29 → 11; compile-rules2 12 → 12 → 5.
-
-Readout:
-- The compile gate is a clean win: +2.7 tasks on every seed, never loses a task it solved without it, at +4% time.
-  All its catches are real (every reference solution passes the gate), and Kotlin catches are fixed every time.
-- The smoke run adds little on top of the gate (+0.3 tasks, quality +0.03) at 1.6x its time. The writer's own
-  expected output is unreliable: of 56 smoke-stage catches only 11 ended in a passing file; the rest were the writer
-  "fixing" toward its own wrong expectation, or false alarms on files that passed the hidden tests.
-- Preventive rules: the best mean pass@1 (13.3, +2.3 over the gate alone) and the same pass@2 as smoke at the gate's
-  cost, but with a large seed spread (10, 15, 15) and losses on 1.7 tasks, so not settled at 3 seeds.
-- A rule that tells the model to check its work backfires without tools. v1 of the rules also had "Before replying,
-  check the file as bash -n, python3 -m py_compile or kotlinc would"; Qwen3.8 then answered with made-up tool calls
-  (`<tool_call><function=Bash>cat /app/solution.py`) instead of the file: 11 attempts without a code block, pass@2 8
-  on seed 1 (gate alone: 18). Stopped after seed 1. Checking belongs to the harness (a gate or a hook), not the prompt.
-- What fails and why (all stored runs): 74 of 102 bash syntax errors are awk code that bash parses as shell because
-  the single-quoted awk program closed early; in 48 of 111 Qwen bash -n failures the cause is an apostrophe in an awk
-  comment ("doesn't"). Kotlin compile errors: unresolved references (missing imports), `'\f'` (no such escape in
-  Kotlin), nullable vs non-null generics. Python failures are 85% wrong answers, which only tests catch; py_apply_patch,
-  py_expr_eval and py_shell_split fail in every seed and mode.
-
-Step 3 (Nov 27-28, in progress): FF smoke on the DeepSeek setups, seed 1, on the 29 tasks and both joined sets
-(launchers tmp_ff_ds.sh, tmp_ff_combo.sh). No-FF baselines: the 29-task 3-seed means of the matrix (DeepSeek alone's
-seed 1 has no per-task data) and the seed-1 joined runs above. pass@1 / pass@2 / quality, time.
-
-| setup | 29 tasks, FF | 29 tasks, no FF (3-seed mean) | joined (6), FF | joined, no FF | joined2 (6), FF | joined2, no FF | 12 joined pooled, FF | 12 joined, no FF |
-|---|---|---|---|---|---|---|---|---|
-| DeepSeek alone | 21 / 25 / 0.973, 367 min | 19.0 / 24.7 / 0.938, ~160 min | 1 / 2 / 0.951, 278 min | 0 / 1 / 0.857, 131 min | 0 / 3 / 0.898, 159 min | 1 / 3 / 0.947, 104 min | 1 / 5 / 0.925, 437 min | 1 / 4 / 0.902, 235 min |
-| DS + DeepSeek review | 18 / 28 / 0.983, 468 min | 21.0 / 26.3 / 0.973 (s1: 27) | 2 / **5** / **0.996**, 293 min | 2 / 2 / 0.978, 177 min | 1 / **5** / 0.956, 246 min | 1 / 3 / 0.939, 210 min | 3 / **10** / **0.976**, 539 min | 3 / 5 / 0.958, 387 min |
-
-- DeepSeek alone + FF: +1 task on the 12 joined tasks and +0.023 quality, +0.3 tasks and +0.035 quality on the 29,
-  at about 2x the time. On joined2 it solves a different 3 than without FF (sh_files, sh_net instead of kt_booking,
-  py_splitter). FF caught 21 attempts over the three sets; 10 were fixed and only 5 of those passed.
-- DS + DeepSeek review + FF: 10 of 12 joined tasks (5 + 5), quality 0.976, the best on the joined tasks so far
-  (no-FF DS>DS pair: 8), including the first solves of py_release and sh_ops by any setup. But FF changed only 2
-  attempts over the 12 tasks (2 catches, both fixed and passed): on the other 10 tasks this run is the same protocol
-  as the no-FF run, which solved 5. So most of the 5-task gap is run-to-run variation, not FF. One seed on 6-task
-  sets swings by several tasks; the single-seed joined rankings above (8 / 7 / 5 / 4) are within that noise.
+Moved to [ff-study.md](ff-study.md): the plan, the offline replay, Qwen3.8 off / compile / smoke / rules over 3 seeds,
+FF on the DeepSeek setups, findings and recommendations. In short: the compile gate is a clean win (+2.7 of 29 for
+Qwen3.8, never loses a task, +4% time); the smoke run is not worth its time; DeepSeek + Qwen3.8 review stays the
+default.
 
 Already covered by the matrix and not re-run: review as a hint, not a gate (the reviewer's flags do not separate failing
 from passing drafts, 33/39 vs 32/39); tests first for a mid-size writer (V4).

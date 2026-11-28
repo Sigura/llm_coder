@@ -1,6 +1,6 @@
 # Pair programming eval: winners and headline
 
-Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short), [pair-eval-report.md](pair-eval-report.md) (setup, generated tables, literature, gaps), [pair-eval-findings.md](pair-eval-findings.md) (per-run findings), [pair-eval-literature.md](pair-eval-literature.md) (literature against our findings).
+Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short), [pair-eval-report.md](pair-eval-report.md) (setup, generated tables, literature, gaps), [pair-eval-findings.md](pair-eval-findings.md) (per-run findings), [pair-eval-literature.md](pair-eval-literature.md) (literature against our findings), [ff-study.md](ff-study.md) (fast feedback: compile gate, smoke runs, writer rules).
 
 ## Winners (hand-written, refreshed on each finished seed; state 2026-11-25 16:40)
 
