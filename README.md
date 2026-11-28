@@ -2,8 +2,8 @@
 
 Local coding models on one host (2x EPYC 7601, 503 GB RAM, 3x RTX 4090 + RTX 3090 Ti): build and serve them,
 point OpenCode at them, and measure which model or pipeline writes the best code. The default setup is DeepSeek
-V4.1 Flash on SGLang + KTransformers (port 8080) as the main model, Qwen3.8-27B (8086) as the fast one, and
-Qwen3.6-35B-A3B MTP (8085) as the small model and reviewer.
+V4.1 Flash on SGLang + KTransformers (port 8080) as the main model, Qwen3.8-27B (8086) as the fast one and the
+reviewer, and Qwen3.6-35B-A3B MTP (8085) as the small model.
 
 | path | what |
 |---|---|
@@ -42,6 +42,16 @@ stack/scripts/opencode-local.sh --auto           # through the router: Qwen3.8 u
 stack/scripts/llm-router.sh                      # the router alone on :8090 (model "auto")
 stack/scripts/llm-review.sh --task "parse INI with interpolation" src/ini.py   # independent review: OK or path:line: problem -> fix
 stack/scripts/llm-review.sh --diff --task "fix the off-by-one in paging"       # review the uncommitted diff
+```
+
+Other devbox projects get the same models through the provider file `stack/devbox/local.conf`: DeepSeek writes,
+devbox's OpenCode plugin runs the compile gate after each edit and has Qwen3.8 review every turn's diff, the writer
+rules of the study come from `stack/devbox/opencode/AGENTS.md`, and `llm-review.sh` is on PATH (`/review`):
+
+```bash
+mkdir -p ~/.config/devbox/llm && ln -s ~/llm_coder/stack/devbox/local.conf ~/.config/devbox/llm/local.conf
+devbox llm                                       # the servers and whether they answer
+cd ~/some-project && devbox llm use --keep local # OpenCode on them, saved in the project's .devbox.conf
 ```
 
 ## Measuring
@@ -88,4 +98,6 @@ llm/engines/alt/kt-wrapper/.venv/bin/python stack/scripts/kt_placement_from_dump
   [DeepSeek token-generation study](docs/deepseek-tg-study-2026-11-13.md),
   [two-model setup](docs/two-model-2026-11-13.md),
   [speed comparison of models and engines](docs/speed-comparison-2026-11-21.md).
-- `stack/config/opencode-plan.md`, `stack/config/opencode-review.md`: the plan and review prompts OpenCode gets.
+- `stack/config/opencode-plan.md`, `stack/config/opencode-reviewer.md`, `stack/config/opencode-review.md`: the plan
+  and reviewer prompts OpenCode gets, and the instruction to run `llm-review.sh` where the gate plugin isn't there;
+  `stack/eval/writer-rules2.txt`: the writer rules, for the eval and OpenCode alike.
