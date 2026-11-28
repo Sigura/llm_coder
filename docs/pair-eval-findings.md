@@ -265,3 +265,60 @@ Files: [pair-eval-winners.md](pair-eval-winners.md) (winners + headline, short),
   at about 2x their time per seed (28–34k s vs 13–20k s). The navigator's tests make the first attempt right more often
   and leave less for the second. Kotlin 4/4, Python 14/16, bash 8/9. Failed `py_e_duration`, `py_semver_range` (57 min,
   both attempts), `sh_rotate`; `py_semver_range` also failed seed 1. No "no fenced code block" fault. s3 started 14:14.
+- nav Qwen3.8 + driver DeepSeek (KT), tests first, seed 1: 24 of 29, pass@1 19, tests@2 27.85, in 37,269 s (crashed
+  12:03 on a 1 h request timeout, resumed from 15 tasks done). Plain Q8>DS seed 1: 26 / 18 (mean 26.7 / 19.7), so tests
+  first costs 2.7 pass@2 here and adds nothing to pass@1, at 2–3x the time (37k s vs 11–22k s) and 2.3x the tokens
+  (348k vs ~150k). Score 0.78 vs 0.85 plain. Qwen3.8's tests are mostly wrong: only 6 of 29 test files pass the
+  reference (DeepSeek's: 8 and 6). When the tests were valid, 5 of 6 tasks were solved; when they were wrong, 19 of 23.
+  DeepSeek then spends 59 fix turns chasing them. It lost tasks the plain pair solves: `py_ini_interp`, `py_e_flatten`,
+  `py_e_logstats`, `sh_rotate`, `sh_csv_col`; it gained `sh_access_log`, `sh_e_replace`, `sh_env_export`. Kotlin 4/4,
+  Python 13/16, bash 7/9. No attempt capped, no "no fenced code block" fault. Slow tasks: `py_grid_route` (one
+  ~31k-token driver reply hit the 1 h timeout), `sh_env_export` 71 min. s2 started 20:27, the first seed with streamed
+  requests (eval_pair.py 5592cc1).
+- nav DeepSeek (KT) + driver DeepSeek (KT), tests first, seed 3: 25 of 29, pass@1 21, tests@2 28.34, in 33,820 s
+  (seeds 1, 2: 24 / 22, 26 / 24). Mean of 3 seeds **25.0 pass@2**, **22.3 pass@1** (score 0.83): still the best pass@1
+  of any setup (DS+rDS 21.0, DS+DS pair 20.0), and still ~1.7 below the plain DS+DS pair and 2.0–2.3 below the
+  reviewer setups at pass@2, at about 2x their time (28–34k s vs 13–20k s). Kotlin 4/4, Python 14/16, bash 7/9.
+  Failed `py_ini_interp`, `py_shell_split`, `sh_e_ext_count`, `sh_rotate` (`sh_rotate` fails every tdd DS+DS seed).
+  Only 6 of 29 navigator test files pass the reference (seeds 1, 2: 8, 6). With valid tests it solved 6 of 6, with
+  wrong ones 19 of 23. `sh_csv_col` took 65 min (21k driver tokens chasing wrong tests in attempt 1, passed attempt 2).
+  No attempt capped, no "no fenced code block" fault. Slot A moved on to nav DS + driver Qwen3.8 (KT) s3 at 23:43.
+- DeepSeek (KT) navigating Qwen3.8, seed 3: 23 of 29, pass@1 15, tests@2 26.35, in 9,139 s (seeds 1, 2: 20 / 13,
+  23 / 14). Mean of 3 seeds **22.0 pass@2**, **14.0 pass@1** (score 0.68), +5.3 over Qwen3.8 alone: level with the
+  DeepSeek reviewer (22.0, pass@1 13.7, n 3) and the Qwen3.8 tests-first self-pair (22.3, n 3), which needs no DeepSeek.
+  Kotlin 4/4, Python 11/16, bash 8/9. Failed `py_apply_patch`, `py_e_config_merge`, `py_e_duration`, `py_expr_eval`,
+  `py_shell_split`, `sh_e_ext_count`; `py_expr_eval` failed all 3 seeds, but `py_ini_interp`, `sh_csv_col` and
+  `sh_env_export` (failed seeds 1 and 2) passed. 4 "no fenced code block" faults (`py_apply_patch` #1, `py_ini_interp`
+  #1, `sh_e_ext_count` #1 and #2), so the revise-turn fault still costs ~1 task per seed. Slot A moved on to tdd nav DS
+  + driver Qwen3.8 s2 at 01:44.
+- Qwen3.8 navigating DeepSeek (KT), tests first, seed 2: **29 of 29**, pass@1 23, tests@2 29.0, in 23,587 s (seed 1:
+  24 / 19, 37,269 s), the first complete seed with streamed requests and the first tdd seed to solve everything. Mean of
+  2 seeds **26.5 pass@2**, **21.0 pass@1** (score 0.86, Winners #3 at n 2): level with the plain Q8>DS pair (26.7 /
+  19.7) at pass@2, +1.3 pass@1, at 2–3x its time. Still only 6 of 29 Qwen3.8 test files pass the reference (seed 1: 6);
+  with wrong tests DeepSeek solved 23 of 23 this time (seed 1: 19 of 23), so the seed-to-seed gap is the driver, not the
+  tests. No attempt capped, no "no fenced code block" fault; driver 185k tokens (seed 1: 283k). Slowest tasks 30–37 min
+  (`py_apply_patch`, `py_shell_split`, `py_grid_route`; seed 1's `py_grid_route` took 101 min). s3 started 03:03.
+- DeepSeek (KT) navigating Qwen3.8, tests first, seed 2: 22 of 29, pass@1 19, tests@2 26.29, in 17,028 s (seed 1, Nov 22:
+  20 / 17, 16,813 s). Mean of 2 seeds **21.0 pass@2**, **18.0 pass@1** (score 0.69, Winners #11): the best Qwen3.8
+  pass@1 of any setup, but 1–1.3 below the Qwen3.8 tests-first self-pair (22.3), the DeepSeek navigator pair and the
+  DeepSeek reviewer (22.0 each) at pass@2. Kotlin 4/4, Python 11/16, bash 7/9. Failed `py_expr_eval`, `py_ini_interp`,
+  `py_semver_range`, `py_shell_split`, `py_typed_load`, `sh_csv_col`, `sh_rotate` (5 of them also failed seed 1). DeepSeek's
+  test files pass the reference on only 6 of 29 tasks (seed 1: 10); Qwen3.8 solved 5 of those 6 and 17 of the 23 with wrong
+  tests (seed 1: 10 of 10, 10 of 19). No "no fenced code block" fault (seed 1: 3), none capped. Driver 246k tokens
+  (seed 1: 201k). s3 started 06:37.
+- Qwen3.8 navigating DeepSeek (KT), tests first, seed 3: 26 of 29, pass@1 22, tests@2 27.71, in 26,047 s (seeds 1, 2:
+  24 / 19, 29 / 23). Mean of 3 seeds **26.3 pass@2**, **21.3 pass@1** (score 0.86, Winners #3): level with the plain
+  Q8>DS pair (26.7 / 19.7) and the DS+DS pair (26.7 / 20.0) at pass@2, +1.3–1.6 pass@1, at 2–3x their time; only the
+  two reviewer setups (0.87) score higher. Kotlin 3/4, Python 14/16, bash 9/9. Failed `kt_render`, `py_apply_patch`,
+  `py_e_flatten` (`py_e_flatten` also failed seed 1). 7 of 29 navigator test files pass the reference (seeds 1, 2: 6, 6);
+  DeepSeek solved 7 of 7 with valid tests and 19 of 22 with wrong ones. No attempt capped, no "no fenced code block"
+  fault in any of the 3 seeds. Slowest `py_grid_route` 55 min.
+- DeepSeek (KT) navigating Qwen3.8, tests first, seed 3: 23 of 29, pass@1 19, tests@2 26.44, in 16,340 s (seeds 1, 2:
+  20 / 17, 22 / 19). Mean of 3 seeds **21.7 pass@2**, **18.3 pass@1** (score 0.71, Winners #11): the best Qwen3.8
+  pass@1, and within a seed of the other Qwen3.8 setups at pass@2 (tdd self-pair 22.3, DeepSeek navigator 22.0,
+  DeepSeek reviewer 22.0), at 6–7x Qwen3.8 alone's time. Kotlin 4/4, Python 12/16, bash 7/9. Failed `py_apply_patch`,
+  `py_expr_eval`, `py_ini_interp`, `py_shell_split`, `sh_csv_col`, `sh_rotate`; `py_ini_interp`, `py_shell_split`,
+  `sh_csv_col`, `sh_rotate` failed all 3 seeds. 10 of 29 DeepSeek test files pass the reference (seeds 1, 2: 10, 6);
+  Qwen3.8 solved 8 of 10 with valid tests and 15 of 19 with wrong ones. No "no fenced code block" fault, none capped.
+  Both queues finished at 11:24; the DeepSeek-written cells are complete at n 3, only Qwen3.6 + DeepSeek review s2, s3
+  remain.

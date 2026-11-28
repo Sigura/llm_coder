@@ -1,0 +1,56 @@
+lang = "bash"
+file = "solution.sh"
+prompt = """
+Write one bash script `solution.sh SUBCOMMAND ARGS...` with four subcommands. An unknown or missing subcommand
+prints a usage message to stderr and exits 2. Wrong arguments of a subcommand (missing, extra or invalid ones, a
+DIR that is not a directory) print a message to stderr and exit 2. File names may contain spaces but no newlines.
+All sorting is by byte order (`LC_ALL=C`).
+
+## Part 1: subcommand `human`
+
+`solution.sh human BYTES` prints a byte count in human-readable form, one line.
+
+- BYTES is 1 to 16 decimal digits (leading zeros allowed: `007` is 7); anything else is an invalid argument.
+- Below 1024 print `<n>B` (`0B`, `1023B`). Otherwise pick the largest unit U of K = 1024, M = 1024^2,
+  G = 1024^3, T = 1024^4 with BYTES >= U and let v = BYTES / U. If v rounded half up to one decimal is below 10,
+  print it with one decimal (`1.0K`, `1.5K`, `9.9K`); otherwise print v rounded half up to an integer (`10K`,
+  `1000K`). If that integer is 1024 and U is not T, print the next unit instead (`1048575` -> `1.0M`).
+
+## Part 2: subcommand `dupes`
+
+`solution.sh dupes DIR` finds groups of regular files under DIR (recursively) with identical content.
+
+- Only non-empty regular files count; symlinks are neither followed nor counted. Hidden files and directories
+  count like any others.
+- A group is two or more files with the same content. Print each file of a group as a line `SIZE PATH`, SIZE in
+  bytes and PATH relative to DIR (no `./` prefix), paths sorted within the group. Order the groups by SIZE
+  descending, then by their first path, with one empty line between groups. No groups: no output. Exit 0.
+
+## Part 3: subcommand `tree`
+
+`solution.sh tree [-L DEPTH] DIR` prints a directory tree.
+
+- The first line is DIR exactly as given. Then the entries of each directory, sorted by name, skipping names that
+  start with `.`, each on its own line: a prefix, then `├── ` (or `└── ` for the last entry of its directory),
+  then the name. The prefix holds, for each enclosing directory level below DIR, `│   ` if that directory was not
+  the last entry of its parent, else four spaces.
+- A directory is shown as `name/` and its entries follow it. A symlink is shown as `name -> TARGET` (the link
+  text, not resolved) and never followed, even if it points to a directory. Everything else is shown as `name`.
+- `-L DEPTH` (a positive integer) shows entries down to DEPTH levels (1 = only DIR's own entries); deeper
+  directories are still shown but not opened. Without `-L` there is no limit.
+- After the tree print an empty line and `D directories, F files`, counting the shown entries (DIR itself not
+  included; symlinks count as files).
+
+## Part 4: subcommand `report`
+
+`solution.sh report [-L DEPTH] DIR` combines the parts above.
+
+- First the output of `tree` with the same arguments, then an empty line.
+- Then `duplicates: none` if `dupes DIR` finds no group. Otherwise `duplicates:` followed by one line per group, in
+  the order of part 2: two spaces, `<count> x <size>:` and then the group's paths, each preceded by one space and
+  separated by `,`, e.g. `  2 x 1.5K: a.bin, sub/b.bin`. `<size>` is the file size formatted as in part 1.
+- Last, `reclaimable: <human>`, the bytes saved by keeping one file per group (size times count minus one, summed
+  over all groups), formatted as in part 1.
+
+Environment: GNU bash 5.2, GNU coreutils (`sha256sum`, `stat`, `sort`, ...), GNU find/sed/grep, and `awk` is mawk (POSIX awk: do not rely on gawk-only features such as `asort`, `PROCINFO`, `gensub`, `strftime`). No Python, Perl or jq.
+"""

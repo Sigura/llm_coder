@@ -10,6 +10,8 @@ The navigator keeps one conversation per task, so llama-server reuses its prompt
 --tests-first: after the plan the navigator writes its own test file from the task text (burnish's harness format);
 the driver sees it, and before the real tests the driver's file runs against it, with up to --tdd-rounds fix turns.
 Whether the navigator's tests pass on the task's reference solution is recorded, never shown to the models.
+--tests-only: only the navigator's plan and test turns, no driver: a cheap replay that scores the test writer alone
+(how many of its test files pass the reference), e.g. with and without --nav-think.
 --batch N: N consecutive tasks share one navigator and one driver conversation, like a PR with N changes: one plan
 turn, one driver turn writing all N files, one review turn over all of them, one revision turn for the files the
 review flagged; after the tests, one advice turn and one fix turn for the failed tasks. Scored per task; each turn's
@@ -65,12 +67,16 @@ FAIL_ASK = (
 TEST_FILE = {"python": "test.py", "bash": "test.sh", "kotlin": "Test.kt"}
 HARNESS = {
     "python": "`test.py`: `def test_*():` functions with plain `assert`, importing what they test from `{module}`, "
-              "and ending with exactly these two lines:\nfrom _runner import main\nmain(globals())\n",
-    "bash": "`test.sh`: it starts with `source ./assert.sh`, runs the script as `bash {file} ...` in an empty "
-            "temporary directory (it may create files there), compares with `check NAME EXPECTED ACTUAL` (string "
-            "equality) and ends with `finish`.",
+              "and ending with exactly these two lines:\nfrom _runner import main\nmain(globals())\n"
+              "Only the standard library is installed (no pytest): check exceptions with try/except.",
+    "bash": "`test.sh`: it starts with `source ./assert.sh`, runs the script as `bash {file} ...` in a temporary "
+            "directory that holds only `{file}`, `assert.sh` and the fixture files the task names (it may create files there; after a `cd` elsewhere, "
+            "call the script by the absolute path saved before it), compares with `check NAME EXPECTED ACTUAL` "
+            "(string equality) and ends with `finish`.",
     "kotlin": "`Test.kt`, compiled together with `{file}`: `fun main() {{ ... finish() }}` holding `check(\"name\") "
-              "{{ ... }}` blocks that use `eq(expected, actual)` and `throws<SomeException> {{ ... }}`.",
+              "{{ ... }}` blocks that use `eq(expected, actual)` and `throws<SomeException> {{ ... }}`. These four "
+              "come from the harness's TestKit.kt, compiled with it: do not define them, or anything else named "
+              "`check`, `eq`, `throws`, `finish`, `passed` or `failed`.",
 }
 TESTS_ASK = (
     "Now write the tests the driver's file must pass, as {harness} Cover your checks and the edge cases the task "
@@ -118,7 +124,7 @@ class Model:
 
     def chat(self, messages, max_tokens=None) -> tuple[str, bool, dict, float]:
         body = {"messages": messages, "seed": self.seed, "max_tokens": max_tokens or self.max_tokens,
-                "chat_template_kwargs": {"enable_thinking": self.think}, "stream": True,
+                "chat_template_kwargs": {"enable_thinking": self.think, "thinking": self.think}, "stream": True,
                 "stream_options": {"include_usage": True}, **self.sampling}
         if self.model:
             body["model"] = self.model
@@ -185,6 +191,23 @@ def run_nav_tests(rce, task, code: str, tests: str) -> tuple[bool, str]:
         return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
 
 
+def fast_feedback(rce, task, code: str, drv: Model, args, plan_state: dict, stats: dict) -> tuple[bool, str, str]:
+    """burnish's --feedback checks; the smoke example is planned by the driver (the writer) in a separate call."""
+    ok, out = rce.compile_gate(task, code)
+    if not ok or args.feedback == "compile" or task["lang"] == "kotlin":
+        return ok, "compile", out
+    if "plan" not in plan_state:
+        reply, _, usage, secs = drv.chat([{"role": "system", "content": rce.SMOKE_SYSTEM},
+                                          {"role": "user", "content": rce.smoke_ask(task, code)}])
+        stats["seconds"] += secs
+        stats["drv_tokens"] += usage.get("completion_tokens") or 0
+        plan_state["plan"] = rce.parse_smoke_plan(reply)
+    if plan_state["plan"] is None:
+        return True, "smoke", "no usable example plan"
+    ok, out = rce.smoke_run(task, code, plan_state["plan"])
+    return ok, "smoke", out
+
+
 def solve(task, nav: Model, drv: Model, rce, args) -> dict:
     task_text = f"{task['prompt'].strip()}\n\nWrite the file `{task['file']}`."
     ask = ARCHITECT_ASK if args.architect else PLAN_ASK
@@ -198,7 +221,7 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
         harness = HARNESS[task["lang"]].format(file=task["file"], module=Path(task["file"]).stem)
         nav_msgs.append({"role": "user", "content": TESTS_ASK.format(harness=harness,
                                                                      test_file=TEST_FILE[task["lang"]])})
-        reply, _, usage, secs = nav.chat(nav_msgs, args.tests_max_tokens)
+        reply, tests_capped, usage, secs = nav.chat(nav_msgs, args.tests_max_tokens)
         nav_msgs.append({"role": "assistant", "content": reply})
         pending["seconds"] += secs
         pending["nav_tokens"] += usage.get("completion_tokens") or 0
@@ -207,6 +230,10 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
             drv_task += f"\n\nThe navigator's tests, `{TEST_FILE[task['lang']]}`; your file must pass them:\n```\n{tests}```"
             ref = task["dir"] / f"ref{Path(task['file']).suffix}"
             tests_on_ref = run_nav_tests(rce, task, ref.read_text(), tests)[0]
+        if args.tests_only:
+            return {"id": task["id"], "lang": task["lang"], "plan": plan, "nav_tests": tests,
+                    "nav_tests_on_ref": tests_on_ref, "tests_capped": tests_capped,
+                    "seconds": round(pending["seconds"], 1), "navigator_tokens": pending["nav_tokens"]}
     drv_msgs = [{"role": "system", "content": rce.SYSTEM}, {"role": "user", "content": drv_task}]
     attempts = []
     for _ in range(args.attempts):
@@ -249,6 +276,23 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
                 stats["drv_tokens"] += usage.get("completion_tokens") or 0
                 fixed = rce.extract_code(reply)
                 code = fixed if fixed is not None else code
+        checks = []
+        if args.feedback != "off" and code is not None:
+            plan_state = {}
+            for r in range(args.feedback_rounds + 1):
+                ok, stage, out = fast_feedback(rce, task, code, drv, args, plan_state, stats)
+                checks.append({"stage": stage, "ok": ok, "output": out[-500:]})
+                if ok or r == args.feedback_rounds:
+                    break
+                drv_msgs += [{"role": "assistant", "content": reply},
+                             {"role": "user", "content": rce.FF_FIX.format(output=out[-rce.FEEDBACK_CHARS:], note="",
+                                                                           file=task["file"])}]
+                reply, capped, usage, secs = drv.chat(drv_msgs)
+                stats["seconds"] += secs
+                stats["drv_tokens"] += usage.get("completion_tokens") or 0
+                code = rce.extract_code(reply)
+                if code is None:
+                    break
         if code is None:
             passed = False
             output = f"reply cut off at --max-tokens {args.max_tokens}" if capped else "no fenced code block in the reply"
@@ -259,7 +303,8 @@ def solve(task, nav: Model, drv: Model, rce, args) -> dict:
                          "completion_tokens": stats["drv_tokens"] + stats["nav_tokens"],
                          "driver_tokens": stats["drv_tokens"], "navigator_tokens": stats["nav_tokens"],
                          "reply": reply, "review": verdict, **({"plan": plan} if not attempts else {}),
-                         **({"nav_checks": nav_checks} if tests is not None else {})})
+                         **({"nav_checks": nav_checks} if tests is not None else {}),
+                         **({"feedback": checks} if checks else {})})
         if passed:
             break
         nav_msgs.append({"role": "user", "content": FAIL_ASK.format(output=output)})
@@ -378,7 +423,7 @@ def main():
     p.add_argument("--nav-url", required=True)
     p.add_argument("--nav-model")
     p.add_argument("--nav-key-file")
-    p.add_argument("--driver-url", required=True)
+    p.add_argument("--driver-url", help="required unless --tests-only")
     p.add_argument("--driver-model")
     p.add_argument("--driver-key-file")
     p.add_argument("--label", default="pair")
@@ -410,14 +455,24 @@ def main():
     p.add_argument("--tests-first", action="store_true",
                    help="navigator writes a test file after the plan; the driver's file must pass it first")
     p.add_argument("--tdd-rounds", type=int, default=2, help="driver fix turns against the navigator's tests")
+    p.add_argument("--tests-only", action="store_true", help="navigator plan + tests turns only, no driver")
     p.add_argument("--tests-max-tokens", type=int, default=6000, help="navigator tokens for the test file")
+    p.add_argument("--feedback", choices=("off", "compile", "smoke"), default="off",
+                   help="burnish's checks before the real tests (after review and --tests-first), failures go back "
+                        "to the driver")
+    p.add_argument("--feedback-rounds", type=int, default=2, help="driver fix turns per attempt for --feedback")
     p.add_argument("--batch", type=int, default=1, help="tasks per shared session (see the module doc)")
     p.add_argument("--task-dir", help="task folders to run instead of burnish's eval/coding/tasks")
     p.add_argument("--out-dir", default=os.path.expanduser("~/llm_coder/llm/results/pair-eval"))
     args = p.parse_args()
     if args.batch < 1:
         p.error("--batch must be >= 1")
-    if args.batch > 1 and (args.tests_first or args.architect or args.answer_review or args.review != "always"):
+    if args.tests_only:
+        args.tests_first = True
+    elif not args.driver_url:
+        p.error("--driver-url is required unless --tests-only")
+    if args.batch > 1 and (args.tests_first or args.architect or args.answer_review or args.review != "always"
+                           or args.feedback != "off"):
         p.error("--batch supports only the original protocol, optionally with --keep-unrevised and --nav-think")
 
     root = Path(args.burnish)
@@ -428,8 +483,8 @@ def main():
         p.error("no tasks matched")
     nav = Model(args.nav_url, args.nav_model, args.nav_key_file, sampling(args, "nav"), args.nav_max_tokens, args.seed,
                 args.nav_think)
-    drv = Model(args.driver_url, args.driver_model, args.driver_key_file, sampling(args, "driver"), args.max_tokens,
-                args.seed)
+    drv = None if args.tests_only else Model(args.driver_url, args.driver_model, args.driver_key_file,
+                                             sampling(args, "driver"), args.max_tokens, args.seed)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # after each task, so a host hang loses one task, not the seed; a rerun with the same label resumes from it
@@ -448,8 +503,27 @@ def main():
         tmp.write_text(json.dumps({"results": results}, indent=1))
         os.replace(tmp, partial)
         for r in rs:
+            if args.tests_only:
+                mark = {True: "ref+", False: "ref-", None: "none"}[r["nav_tests_on_ref"]]
+                print(f"{r['id']:<28} {mark:<4} {r['seconds']:7.1f} s", flush=True)
+                continue
             marks = "".join("+" if a["passed"] else "-" for a in r["attempts"])
             print(f"{r['id']:<28} {marks:<3} {sum(a['seconds'] for a in r['attempts']):7.1f} s", flush=True)
+    if args.tests_only:
+        summary = {}
+        for lang in ("all", *sorted({r["lang"] for r in results})):
+            rs = [r for r in results if lang in ("all", r["lang"])]
+            summary[lang] = {"tasks": len(rs), "tests_on_ref": sum(r["nav_tests_on_ref"] is True for r in rs),
+                             "no_tests": sum(r["nav_tests"] is None for r in rs),
+                             "tests_capped": sum(r["tests_capped"] for r in rs),
+                             "seconds": round(sum(r["seconds"] for r in rs), 1),
+                             "navigator_tokens": sum(r["navigator_tokens"] for r in rs)}
+        out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}.json"
+        out.write_text(json.dumps({"args": {k: v for k, v in vars(args).items() if not k.endswith("key_file")},
+                                   "summary": summary, "results": results}, indent=1))
+        partial.unlink()
+        print(json.dumps(summary["all"]), out, flush=True)
+        return
     summary = rce.summarize(results, args.attempts)
     for lang, s in summary.items():
         rs = [r for r in results if lang in ("all", r["lang"])]

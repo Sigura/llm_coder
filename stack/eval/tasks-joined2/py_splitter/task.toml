@@ -1,0 +1,64 @@
+lang = "python"
+file = "solution.py"
+prompt = """
+Write one Python module for a small expense splitter. It consists of four parts; implement all of them in the
+same file. The functions of parts 1-3 are tested on their own too, so keep their exact names and signatures.
+Standard library only.
+
+## Part 1
+
+Implement two functions for money amounts kept as integer cents.
+
+`parse_amount(s: str) -> int` returns the amount in cents.
+- Surrounding whitespace is ignored. Then: an optional `-`, an integer part, an optional fraction.
+- The integer part is either plain digits (`1234`) or digits grouped with commas: a first group of 1-3 digits,
+  then groups of exactly 3 digits each preceded by a comma (`1,234,567`). Mixed forms (`12,34`, `1234,567`,
+  `,123`) are invalid.
+- The fraction is `.` followed by 1 or 2 digits (`12.5` is 1250 cents). `12.` and `.5` are invalid.
+- `-0` and `-0.00` give 0. Anything else (empty input, other characters, a `+` sign, spaces inside) raises
+  `ValueError`.
+
+`format_amount(cents: int) -> str` is the inverse in canonical form: an optional `-`, the integer part with comma
+thousands separators, `.` and exactly 2 digits, e.g. `-123456` -> `-1,234.56`, `5` -> `0.05`, `0` -> `0.00`.
+
+## Part 2
+
+Implement `read_csv(text: str) -> list[dict[str, str]]`, a CSV reader. Do not use the `csv` module.
+
+- Fields are separated by `,`, records by `\\n` or `\\r\\n` (a trailing line break after the last record is
+  allowed).
+- A field may be enclosed in double quotes; inside, `""` stands for one quote and commas and line breaks are
+  literal. A quote inside an unquoted field, anything other than `,` or a line break after a closing quote, or an
+  unterminated quoted field raise `ValueError`.
+- The first record is the header. Header names must be non-empty and unique, else `ValueError`.
+- Every other record becomes a dict mapping header names to field values (values are not stripped). A record with
+  a different number of fields than the header raises `ValueError`. Empty lines (a record with no characters at
+  all) are skipped anywhere. Input with no header record raises `ValueError`.
+
+## Part 3
+
+Implement `allocate(total: int, weights: list[int]) -> list[int]`, which splits an integer amount (may be
+negative) into parts proportional to `weights`, summing exactly to `total`.
+
+- Each part first gets `floor(|total| * w / W)` where `W` is the sum of the weights. The leftover units go one
+  each to the parts with the largest remainders `|total| * w mod W`; ties go to the lower index. For a negative
+  `total`, split `|total|` this way and negate every part.
+- An empty list, a negative weight, or a zero weight sum raises `ValueError`. Zero weights are allowed otherwise.
+
+## Part 4: `settle`
+
+Implement `settle(csv_text: str) -> list[str]` using the functions above.
+
+- `csv_text` is read with `read_csv`. It must have the columns `payer`, `amount` and `split` (other columns are
+  ignored), else `ValueError`.
+- Each record is one expense: `payer` (stripped, non-empty) paid `amount` (`parse_amount`). `split` lists who
+  shares it, separated by `;`: each item is `name` or `name*weight` (weight a positive integer without sign,
+  default 1); names are stripped and must be non-empty; a name may appear only once per record. The amount is
+  split with `allocate` over these weights in the listed order.
+- A person's balance is everything they paid minus every share they owe. Balances are kept as integer cents.
+- Settle debts greedily: while some balance is not zero, take the person with the most negative balance (the
+  debtor) and the person with the most positive balance (the creditor), ties broken by the alphabetically first
+  name, and move `min(-debt, credit)` from the debtor to the creditor. Each move is one line
+  `"<debtor> -> <creditor>: <format_amount(moved)>"`; return the lines in the order they were produced.
+- Any invalid input raises `ValueError`.
+"""

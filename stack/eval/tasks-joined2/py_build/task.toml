@@ -1,0 +1,63 @@
+lang = "python"
+file = "solution.py"
+prompt = """
+Write one Python module for a tiny make-like build planner. It consists of four parts; implement all of them in
+the same file. The functions and classes of parts 1-3 are tested on their own too, so keep their exact names and
+signatures. Standard library only (`fnmatch` and `glob` are not allowed).
+
+## Part 1
+
+Implement `parse_rules(text: str) -> dict[str, list[str]]` for Makefile-like rule lines.
+
+- A line ending with a backslash continues on the next line: the backslash and the line break are replaced by one
+  space. Then `#` starts a comment up to the end of the line, and blank lines are skipped.
+- Every remaining line is `TARGETS: DEPS`: one or more targets, a `:`, zero or more dependencies, all separated by
+  spaces or tabs. Names are any non-empty runs of other characters except `:`. A line without exactly one `:` or
+  without a target raises `ValueError`.
+- Each target maps to its dependencies in order, without duplicates (keep the first occurrence). A target that
+  appears in several lines collects the dependencies of all of them, in line order. A target never depends on
+  itself (`a: a` raises `ValueError`).
+- Return the targets in the order of their first appearance (a `dict` keeps insertion order).
+
+## Part 2
+
+Implement `match(pattern: str, path: str) -> bool` for glob patterns over `/`-separated paths.
+
+- `?` matches one character except `/`; `*` matches any run (possibly empty) of characters except `/`.
+- `[abc]`, `[a-z]` and `[!abc]` match one character (not `/`) from or not from the set; a `]` right after `[` or
+  `[!` is a literal member. An unclosed `[` is a literal `[`.
+- A path segment that is exactly `**` matches zero or more whole segments, except as the last segment of the
+  pattern, where it matches one or more: `a/**/b` matches `a/b` and `a/x/y/b`, `**/c` matches `c` and `x/c`,
+  `a/**` matches `a/x` and `a/x/y` but not `a`. `**` inside a segment (`a**b`) acts like `*`.
+- Everything else matches itself literally. The whole path must match.
+
+## Part 3
+
+Implement `toposort(graph: dict[str, list[str]]) -> list[str]` and `class CycleError(ValueError)` with an attribute
+`cycle: list[str]`.
+
+- `graph` maps a node to the nodes it depends on; nodes that only appear as dependencies are nodes too. Return
+  every node exactly once, each after all of its dependencies.
+- Among the nodes that are ready at a time, always take the alphabetically smallest (so the order is unique).
+- If there is a cycle, raise `CycleError` whose `cycle` is one cycle as a closed path `[n1, n2, ..., n1]` where each
+  node depends on the next. Choose it as follows: start at the alphabetically smallest node that lies on any cycle
+  (a node depending on itself counts); then repeatedly go to the alphabetically smallest dependency of the current
+  node that is either the start node or can reach the start node without passing through a node already on the
+  path, until the start node is reached again.
+
+## Part 4: `plan`
+
+Implement `plan(rules_text: str, files: dict[str, int], goals: list[str]) -> list[str]` using the parts above.
+
+- Rules come from `parse_rules`. A dependency may be a glob pattern (it contains `*`, `?` or `[`): it stands for
+  every path in `files` it matches (part 2), in sorted order; a pattern that matches nothing is simply dropped.
+  `files` maps existing file paths to their modification times.
+- A goal is a target name or a pattern; a pattern goal stands for every matching rule target, in sorted order.
+  A goal that is neither a target nor an existing file raises `ValueError`; so does a pattern goal that matches no
+  target. With no goals, the goal is the first target of the rules.
+- A name with no rule must exist in `files`, else `ValueError` (`"no rule to make X"`). A target with a rule is
+  out of date when it is not in `files`, or any dependency is out of date, or any dependency's time is newer than
+  the target's time (a dependency that is out of date counts as newer).
+- Consider only the targets reachable from the goals. Return the out-of-date targets in the order of `toposort`
+  over that subgraph (after glob expansion). Cycles raise `CycleError`, as in part 3.
+"""
