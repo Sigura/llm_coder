@@ -205,6 +205,14 @@ def fast_feedback(rce, task, code: str, drv: Model, args, plan_state: dict, stat
     if plan_state["plan"] is None:
         return True, "smoke", "no usable example plan"
     ok, out = rce.smoke_run(task, code, plan_state["plan"])
+    if not ok and args.feedback == "smoke-judged":
+        reply, _, usage, secs = drv.chat([{"role": "system", "content": rce.SMOKE_JUDGE_SYSTEM},
+                                          {"role": "user", "content": f"Task: {task['prompt'].strip()}\n\nRun:\n"
+                                                                      f"```\n{out}\n```"}])
+        stats["seconds"] += secs
+        stats["drv_tokens"] += usage.get("completion_tokens") or 0
+        if "EXPECTATION" in re.sub(r"<think>.*?</think>", "", reply or "", flags=re.S).upper():
+            return True, "smoke", f"judge: expectation wrong\n{out}"
     return ok, "smoke", out
 
 
@@ -457,9 +465,9 @@ def main():
     p.add_argument("--tdd-rounds", type=int, default=2, help="driver fix turns against the navigator's tests")
     p.add_argument("--tests-only", action="store_true", help="navigator plan + tests turns only, no driver")
     p.add_argument("--tests-max-tokens", type=int, default=6000, help="navigator tokens for the test file")
-    p.add_argument("--feedback", choices=("off", "compile", "smoke"), default="off",
+    p.add_argument("--feedback", choices=("off", "compile", "smoke", "smoke-judged"), default="off",
                    help="burnish's checks before the real tests (after review and --tests-first), failures go back "
-                        "to the driver")
+                        "to the driver; smoke-judged: the driver first decides whether a smoke mismatch is the code's fault")
     p.add_argument("--feedback-rounds", type=int, default=2, help="driver fix turns per attempt for --feedback")
     p.add_argument("--batch", type=int, default=1, help="tasks per shared session (see the module doc)")
     p.add_argument("--task-dir", help="task folders to run instead of burnish's eval/coding/tasks")
