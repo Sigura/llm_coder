@@ -95,7 +95,7 @@ pass@2 / quality, time. "FF changed" = attempts where a check failed and a fix t
 |---|---|---|---|---|---|
 | DeepSeek alone | 21 / 25 / 0.973, 367 min | 19.0 / 24.7 / 0.938, ~160 min | 1 / 5 / 0.925, 437 min | 1 / 4 / 0.902, 235 min | 12 / 9 |
 | DS + DeepSeek review | 18 / 28 / 0.983, 468 min | 21.0 / 26.3 / 0.973, ~266 min | 3 / **10** / **0.976**, 539 min | 3 / 5 / 0.958, 387 min | 8 / 2 |
-| DS + Qwen3.8 review | 20 / **28** / **0.997**, 357 min | 19.7 / 27.0 / 0.988, ~256 min | joined 2 / 6 / 1.000, 340 min; joined2 running | 3 / 7 / 0.960, 492 min (joined 2 / 3 / 0.80, 276 min) | 8 / 4 (joined) |
+| DS + Qwen3.8 review | 20 / **28** / **0.997**, 357 min | 19.7 / 27.0 / 0.988, ~256 min | 4 / **11** / **0.995**, 558 min | 3 / 7 / 0.960, 492 min | 8 / 5 |
 | nav DS + driver DS (pair) | 20 / 26 / 0.979, 567 min | 19.7 / 25.7 / 0.971, ~260 min | joined 1 / 4 / 0.977, 391 min; joined2 running | 3 / 8 / 0.973, 538 min (joined 1 / 3 / 0.982, 329 min) | 8 / 2 (joined) |
 | DS + Qwen3.8 review only on FF fail | queued | | queued | | |
 | Qwen3.8 + DeepSeek review | queued (29 only) | 12.3 / 20.3 / 0.902 | — | | |
@@ -107,6 +107,11 @@ pass@2 / quality, time. "FF changed" = attempts where a check failed and a fix t
 - DS + Qwen3.8 review + FF on joined: 6 of 6 vs 3 of 6 without FF; FF changed 4 attempts and 2 of them then
   passed (sh_log_report attempt 2, sh_ops attempt 1; without FF sh_ops failed on a fixture parse error). py_release
   passed on attempt 2 with no FF change, so that gain is run-to-run variation. 1.23x the time.
+- DS + Qwen3.8 review + FF on joined2: 5 of 6 vs 4 of 6 without FF, quality 0.991 vs 0.983, same time (218 vs 216
+  min). FF changed 1 attempt (py_table attempt 1, still failed; passed on attempt 2 as without FF). Gains py_splitter
+  and sh_files and the loss py_build (17/18) had no FF change: run-to-run variation. Pooled over the 12 joined tasks:
+  11 vs 7, quality 0.995 vs 0.960, 1.13x the time; 2 of the 4 extra solves come from FF fixes (sh_log_report, sh_ops),
+  the rest is noise.
 - DS>DS pair + FF on joined: 4 of 6 vs 3 of 6 without FF; FF changed 2 attempts and neither then passed. The gain
   (py_release on attempt 2) is run-to-run variation; both bash tasks failed with and without FF. 1.19x the time.
 - First solves by any setup: py_release and sh_ops (DS + DeepSeek review + FF, old joined set).
@@ -145,7 +150,7 @@ pass@2 / quality, time. "FF changed" = attempts where a check failed and a fix t
 ## Still running (Nov 28)
 
 - DS>DS pair + FF: joined2.
-- DS + Qwen3.8 review + FF: joined2; then DS + Qwen3.8 review only on FF fail (29, joined, joined2); then
+- DS + Qwen3.8 review only on FF fail (29, joined, joined2); then
   Qwen3.8 + DeepSeek review + FF (29).
 - Then (tmp_ff_next.sh, one KT slot each): DS + Qwen3.8 review + compile gate only (29, joined, joined2); seed 2 on
   the 12 joined tasks for DS + Qwen3.8 review (compile and off), DeepSeek alone, DS + DeepSeek review, DS>DS pair.
