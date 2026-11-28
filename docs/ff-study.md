@@ -1,7 +1,7 @@
 # Fast feedback (FF) study: results and findings (Nov 26-28)
 
 Files: [pair-eval-winners.md](pair-eval-winners.md) (winners), [pair-eval-report.md](pair-eval-report.md) (matrix,
-joined tasks, practices), this file (FF). State 2026-11-28 15:40; step 3 still running (see the end).
+joined tasks, practices), this file (FF). State 2026-11-28 22:10; step 3 and the smoke follow-up still running (see the end).
 
 ## Summary
 
@@ -33,13 +33,15 @@ hands a failure back to the writer, up to `--feedback-rounds` (2) fix turns, bef
 | off | `--feedback off` | none (the original protocol) |
 | compile (FF0) | `--feedback compile` | Python: py_compile, then `import` of the module; bash: bash -n, then shellcheck -S error; Kotlin: kotlinc |
 | smoke (FF1) | `--feedback smoke` | compile, then one example run: in a separate call the writer is shown the task and its file and answers with one shell command, the expected stdout and exit code; the harness runs it in an empty dir and compares stdout ignoring whitespace (Kotlin: compile only) |
+| smoke-judged | `--feedback smoke-judged` | smoke, but on a mismatch a separate call of the writer model decides from the task text whether the code or the predicted output is wrong; only a code-wrong verdict goes back as a fix turn (recorded as `judge: expectation wrong` otherwise) |
 | review on FF fail | `--review-when ff-fail` | no review up front; the reviewer runs only when a check fails and also sees the failure |
 | rules | `--system-extra FILE` | text appended to the writer's system prompt (stack/eval/writer-rules2.txt) |
 
-Code: burnish eval/coding/run_coding_eval.py (branch feat/coding-eval-review: 4138da0, ddc4a7d, ad09d39, b2581de),
+Code: burnish eval/coding/run_coding_eval.py (branch feat/coding-eval-review: 4138da0, ddc4a7d, ad09d39, b2581de; smoke-judged d88dccf),
 stack/scripts/eval_pair.py `--feedback` (the driver plans the smoke example and gets the failures). Records: each
 attempt's `feedback` list (stage, ok, output). Launchers: stack/scripts/tmp_ff_replay.py, tmp_ff_q8.sh,
-tmp_ff_q8_rules2.sh, tmp_ff_ds.sh, tmp_ff_combo.sh. Results: burnish results/*-ff-*.json, LLM_ROOT/results/ff-study/.
+tmp_ff_q8_rules2.sh, tmp_ff_ds.sh, tmp_ff_combo.sh, tmp_ff_next.sh, tmp_ff_smoke.sh. Results: burnish results/*-ff-*.json
+(since Nov 28 21:50 in the worktree LLM_ROOT/burnish-ff on feat/coding-eval-review), LLM_ROOT/results/ff-study/.
 
 ## Step 1: offline replay (ceiling)
 
@@ -96,8 +98,8 @@ pass@2 / quality, time. "FF changed" = attempts where a check failed and a fix t
 | DeepSeek alone | 21 / 25 / 0.973, 367 min | 19.0 / 24.7 / 0.938, ~160 min | 1 / 5 / 0.925, 437 min | 1 / 4 / 0.902, 235 min | 12 / 9 |
 | DS + DeepSeek review | 18 / 28 / 0.983, 468 min | 21.0 / 26.3 / 0.973, ~266 min | 3 / **10** / **0.976**, 539 min | 3 / 5 / 0.958, 387 min | 8 / 2 |
 | DS + Qwen3.8 review | 20 / **28** / **0.997**, 357 min | 19.7 / 27.0 / 0.988, ~256 min | 4 / **11** / **0.995**, 558 min | 3 / 7 / 0.960, 492 min | 8 / 5 |
-| nav DS + driver DS (pair) | 20 / 26 / 0.979, 567 min | 19.7 / 25.7 / 0.971, ~260 min | joined 1 / 4 / 0.977, 391 min; joined2 running | 3 / 8 / 0.973, 538 min (joined 1 / 3 / 0.982, 329 min) | 8 / 2 (joined) |
-| DS + Qwen3.8 review only on FF fail | queued | | queued | | |
+| nav DS + driver DS (pair) | 20 / 26 / 0.979, 567 min | 19.7 / 25.7 / 0.971, ~260 min | 5 / 9 / 0.985, 669 min | 3 / 8 / 0.973, 538 min | 8 / 7 |
+| DS + Qwen3.8 review only on FF fail | 21 / 27 / 0.981, 279 min | 19.7 / 27.0 / 0.988, ~256 min | running | | 12 / — |
 | Qwen3.8 + DeepSeek review | queued (29 only) | 12.3 / 20.3 / 0.902 | — | | |
 
 - On DeepSeek the checks change about 8-12 attempts per 29-task run and turn 1-3 of them into passes; the rest are
@@ -114,7 +116,38 @@ pass@2 / quality, time. "FF changed" = attempts where a check failed and a fix t
   the rest is noise.
 - DS>DS pair + FF on joined: 4 of 6 vs 3 of 6 without FF; FF changed 2 attempts and neither then passed. The gain
   (py_release on attempt 2) is run-to-run variation; both bash tasks failed with and without FF. 1.19x the time.
+- DS>DS pair + FF on joined2: 5 of 6 vs 5 of 6 without FF, pass@1 4 vs 2, quality 0.992 vs 0.964, 1.33x the time
+  (278 vs 209 min). FF changed 5 attempts and 3 then passed: sh_net attempt 1 (failed both attempts without FF), sh_files
+  attempt 1 (passed only on attempt 2 without FF) and kt_booking attempt 1 (passed first try without FF too). py_table
+  failed both attempts (19/20) after passing on attempt 2 without FF, with no FF change on attempt 2: noise. Pooled over
+  the 12 joined tasks: 9 vs 8, pass@1 5 vs 3, quality 0.985 vs 0.973, 1.24x the time; one solve (sh_net) comes from FF.
+- DS + Qwen3.8 review only on FF fail, 29 tasks: 21 / 27 / 0.981 in 279 min against the no-FF mean 19.7 / 27.0 /
+  0.988 and smoke with review on every attempt 20 / 28 / 0.997 in 357 min. The reviewer ran on 12 attempts (those with
+  a failed check); FF changed 12 attempts, 2 fixes then passed (py_semver_range, sh_access_log), 3 attempts passed
+  although the check still failed (py_shell_split, sh_e_lowercase, sh_retry: false alarms). Same pass@2 as no FF, quality within noise, +9% time; it saves 22% of the
+  always-review smoke run's time but is not better than no FF. Failed: sh_rotate, sh_wordfreq.
 - First solves by any setup: py_release and sh_ops (DS + DeepSeek review + FF, old joined set).
+
+## Seed 2 on the 12 joined tasks (running)
+
+pass@1 / pass@2 / quality of the 6-task set; the 2-seed ranking follows when every setup has both seeds on both sets.
+
+| setup | joined s1 | joined s2 | joined2 s1 | joined2 s2 |
+|---|---|---|---|---|
+| DeepSeek alone | 0 / 1 / 0.857, 131 min | 1 / 3 / 0.947, 150 min | | running |
+
+- DeepSeek alone on joined, seed 2 vs seed 1: py_patcher and py_release now pass on attempt 2 and py_scheduler on
+  attempt 1 (all failed in seed 1); kt_cache_render passed on attempt 2 in seed 1 and fails both here; sh_log_report
+  and sh_ops fail in both. The same setup moves by 2 of 6 between seeds: smaller joined-set gaps are noise.
+
+## Smoke follow-up (queued)
+
+Smoke's seed-1 0.997 on DS + Qwen3.8 review is 0.009 over the no-FF mean, inside the 0.02-0.04 seed spread. To
+settle it, on the 29 tasks (stack/scripts/tmp_ff_smoke.sh, one KT slot, interleaved): smoke-judged seed 1, smoke
+seeds 2-3 and compile seeds 2-3 for DS + Qwen3.8 review (compile seed 1 is in tmp_ff_next.sh), and smoke-judged
+seed 1, smoke seeds 2-3 and compile seeds 1-3 for the DS>DS pair. Why a judged smoke: of 102 stored smoke failures
+only 7 predicted an output that is written in the task text, and 40 were on attempts that passed the hidden tests
+anyway, so most smoke catches are false alarms that cost a full rewrite. A judge call costs a word, not a file.
 
 ## Findings
 
@@ -147,10 +180,12 @@ pass@2 / quality, time. "FF changed" = attempts where a check failed and a fix t
   before replying" unless the agent has the tool.
 - Default coder: DeepSeek + Qwen3.8 review plus the compile gate. Skip the smoke run.
 
-## Still running (Nov 28)
+## Still running (Nov 28, 22:10)
 
-- DS>DS pair + FF: joined2.
-- DS + Qwen3.8 review only on FF fail (29, joined, joined2); then
-  Qwen3.8 + DeepSeek review + FF (29).
-- Then (tmp_ff_next.sh, one KT slot each): DS + Qwen3.8 review + compile gate only (29, joined, joined2); seed 2 on
-  the 12 joined tasks for DS + Qwen3.8 review (compile and off), DeepSeek alone, DS + DeepSeek review, DS>DS pair.
+- tmp_ff_combo.sh review: DS + Qwen3.8 review only on FF fail on joined (running) and joined2; then Qwen3.8 +
+  DeepSeek review + FF (29).
+- tmp_ff_next.sh a (after the review lane): DS + Qwen3.8 review + compile gate only (29, joined, joined2), + rules2
+  (29); seed 2 on the 12 joined tasks for DS + Qwen3.8 review (compile and off).
+- tmp_ff_next.sh b: seed 2 on the 12 joined tasks for DS + DeepSeek review (joined running), DeepSeek alone
+  (joined2), DS>DS pair.
+- tmp_ff_smoke.sh (when lane a or b frees a slot): the smoke follow-up above, ~75-80 h.
